@@ -1,12 +1,11 @@
-"""Step 4: try pruna's own evaluation tools on the llama.cpp model and write down what happens.
+"""Step 4: compute the accuracy a second time, now with pruna's own evaluation tools.
 
-Usage: python pruna_check.py model data/spider results/q4_k_m.json results/q4_k_m.pruna_check.json
+Usage: python evaluate_with_pruna.py model data/spider results/q4_k_m.json results/q4_k_m.pruna.json
 
-The numbers in the results table do not come from this script. The script is
-the evidence for one sentence in the README: why the benchmark measures with
-evaluate.py and not with pruna's EvaluationAgent. It asks the first few
-questions that evaluate.py asked, this time through pruna, and records for
-each pruna tool either its value or its error.
+evaluate.py already measured everything. This script asks the same questions
+again through pruna's EvaluationAgent with a custom metric, and compares the
+outcome with evaluate.py question by question. It also tries pruna's memory
+metric and pruna's timing metric and records either the value or the error.
 """
 
 import json
@@ -22,7 +21,7 @@ from pruna.evaluation.metrics import LatencyMetric
 from pruna.evaluation.metrics.metric_stateful import StatefulMetric
 from pruna.evaluation.metrics.result import MetricResult
 
-from evaluate import peak_memory_bytes
+from evaluate import memory_status
 from sqlbench.prompt import build_prompt, read_schema
 from sqlbench.settings import MAX_TOKENS, N_CTX, SMOKE_QUESTIONS
 from sqlbench.sqlclean import extract_sql
@@ -37,7 +36,8 @@ class ExecutionAccuracy(StatefulMetric):
 
     def __init__(self) -> None:
         super().__init__(device="cpu")
-        self.add_state("outcomes", [])
+        self.add_state("outcomes", [])  # pruna empties this list after compute()
+        self.last_outcomes = []  # a copy that stays, for the comparison with evaluate.py
 
     def update(self, prompt: str, reference: tuple, output: dict) -> None:
         """pruna calls this after every question with the input, the reference and the model output."""
@@ -46,6 +46,7 @@ class ExecutionAccuracy(StatefulMetric):
         self.outcomes.append(check_answer(database, sql, gold_sql)[0])
 
     def compute(self) -> MetricResult:
+        self.last_outcomes = list(self.outcomes)
         share = sum(self.outcomes) / len(self.outcomes)
         return MetricResult(self.metric_name, {}, share, higher_is_better=True)
 
@@ -66,11 +67,11 @@ def attempt(action) -> dict:
 def main() -> None:
     model_dir, spider_dir = Path(sys.argv[1]), Path(sys.argv[2])
     result_path, findings_path = Path(sys.argv[3]), Path(sys.argv[4])
-    memory_after_imports = peak_memory_bytes()
+    memory_after_imports = memory_status()["VmHWM"]
 
-    # The same questions, prompts and reference queries as in evaluate.py.
+    # The same questions, prompts and reference queries as in evaluate.py, in the same order.
     all_questions = json.loads((spider_dir / "dev.json").read_text(encoding="utf-8"))
-    rows = json.loads(result_path.read_text(encoding="utf-8"))["per_question"][:SMOKE_QUESTIONS]
+    rows = json.loads(result_path.read_text(encoding="utf-8"))["per_question"]
     items = []
     for row in rows:
         question = all_questions[row["index"]]
@@ -91,20 +92,31 @@ def main() -> None:
         agent = EvaluationAgent(request=[metric], datamodule=datamodule, device="cpu")
         return agent.evaluate(model)[0].result
 
+    # 1. Execution accuracy on all questions, as a custom metric inside pruna's EvaluationAgent.
+    accuracy_metric = ExecutionAccuracy()
+    accuracy = attempt(lambda: run(accuracy_metric))
+    expected = [row["correct"] for row in rows]
+    different = sum(a != b for a, b in zip(accuracy_metric.last_outcomes, expected))
+
+    # 2. pruna's memory metric.
+    memory = attempt(lambda: run("inference_memory"))
+
+    # 3. pruna's timing metric on the first few questions: milliseconds per call, after one warm-up call.
+    few = min(SMOKE_QUESTIONS, len(rows))
+    latency = attempt(lambda: run(LatencyMetric(n_iterations=few, n_warmup_iterations=1, device="cpu")))
+
     findings = {
         "pruna_version": pruna.__version__,
-        "questions": len(items),
+        "questions": len(rows),
+        "execution_accuracy_with_pruna": accuracy,
+        "execution_accuracy_with_evaluate_py": sum(expected) / len(expected),
+        "questions_scored_by_pruna": len(accuracy_metric.last_outcomes),
+        "questions_with_a_different_outcome": different,
+        "inference_memory_with_pruna": memory,
+        "latency_ms_with_pruna": latency,
+        "latency_ms_with_evaluate_py": 1000 * sum(row["seconds"] for row in rows[:few]) / few,
+        "latency_questions": few,
         "memory_after_importing_pruna_bytes": memory_after_imports,
-        # 1. A custom accuracy metric inside pruna's EvaluationAgent.
-        "execution_accuracy_with_pruna": attempt(lambda: run(ExecutionAccuracy())),
-        "execution_accuracy_with_evaluate_py": sum(row["correct"] for row in rows) / len(rows),
-        # 2. pruna's memory metric.
-        "inference_memory_with_pruna": attempt(lambda: run("inference_memory")),
-        # 3. pruna's timing metric: milliseconds per call, with one warm-up call.
-        "latency_ms_with_pruna": attempt(
-            lambda: run(LatencyMetric(n_iterations=len(items), n_warmup_iterations=1, device="cpu"))
-        ),
-        "latency_ms_with_evaluate_py": 1000 * sum(row["seconds"] for row in rows) / len(rows),
     }
     findings_path.write_text(json.dumps(findings, indent=2), encoding="utf-8")
     print(json.dumps(findings, indent=2))

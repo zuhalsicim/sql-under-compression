@@ -9,7 +9,6 @@ of the tools that made it. It runs on Linux only (it reads /proc).
 
 import json
 import os
-import resource
 import sys
 import time
 from pathlib import Path
@@ -24,9 +23,20 @@ from sqlbench.sqlexec import check_answer, run_query
 from sqlbench.stats import wilson_interval
 
 
-def peak_memory_bytes() -> int:
-    """Return the most RAM this process has held so far (peak resident set size)."""
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024  # Linux counts in kilobytes
+def memory_status() -> dict:
+    """Read from Linux how much RAM this process holds, in bytes.
+
+    VmHWM    the most RAM the process has held so far (peak resident set size)
+    VmRSS    the RAM it holds now
+    RssFile  the part of VmRSS that is a file mapped into memory, here the model file
+    RssAnon  the part of VmRSS that the process allocated itself
+    """
+    status = {}
+    for line in Path("/proc/self/status").read_text().splitlines():
+        name, _, value = line.partition(":")
+        if name in ("VmHWM", "VmRSS", "RssFile", "RssAnon"):
+            status[name] = int(value.split()[0]) * 1024  # the line looks like "VmHWM:  123456 kB"
+    return status
 
 
 def runner_info() -> dict:
@@ -58,7 +68,7 @@ def main() -> None:
     # A broken reference query then stops the script here and not after an hour.
     for index in indices:
         run_query(database_of(index), all_questions[index]["query"])
-    memory_before_model = peak_memory_bytes()
+    memory_before_model = memory_status()
 
     threads = os.cpu_count()
     llm = llama_cpp.Llama(
@@ -90,14 +100,17 @@ def main() -> None:
                 "seconds": seconds,
                 "prompt_tokens": output["usage"]["prompt_tokens"],
                 "generated_tokens": output["usage"]["completion_tokens"],
-                # llama.cpp counts a generated token when it feeds the token back
-                # into the model. The time is the time of exactly these steps.
-                "generation_steps": counters.n_eval,
+                # llama.cpp's own counters. Reading the prompt and generating are
+                # counted apart. Prompt tokens that were still in its cache from
+                # the question before are not read again and not counted.
+                "prompt_tokens_read": counters.n_p_eval,
+                "prompt_seconds": counters.t_p_eval_ms / 1000,
+                "generation_steps": counters.n_eval,  # one step makes one token
                 "generation_seconds": counters.t_eval_ms / 1000,
             }
         )
         print(f"question {index}: {seconds:.1f} s, {rows[-1]['generated_tokens']} tokens", flush=True)
-    memory_after_generation = peak_memory_bytes()
+    memory_after_generation = memory_status()
 
     # Part 2: run the generated SQL and compare it with the reference result.
     for row in rows:
@@ -117,11 +130,14 @@ def main() -> None:
         "correct": correct,
         "accuracy": correct / len(rows),
         "accuracy_interval_95": [low, high],
-        "peak_memory_bytes": memory_after_generation,
-        "peak_memory_before_model_bytes": memory_before_model,
+        "peak_memory_bytes": memory_after_generation["VmHWM"],
+        "peak_memory_before_model_bytes": memory_before_model["VmHWM"],
+        "memory_after_generation": memory_after_generation,
         "mean_seconds_per_question": sum(row["seconds"] for row in rows) / len(rows),
         "tokens_per_second": sum(row["generation_steps"] for row in rows)
         / sum(row["generation_seconds"] for row in rows),
+        "prompt_tokens_per_second": sum(row["prompt_tokens_read"] for row in rows)
+        / sum(row["prompt_seconds"] for row in rows),
         "answers_cut_at_max_tokens": sum(row["finish_reason"] == "length" for row in rows),
         "settings": {"n_ctx": N_CTX, "max_tokens": MAX_TOKENS, "threads": threads, "temperature": 0.0},
         "runner": runner_info(),

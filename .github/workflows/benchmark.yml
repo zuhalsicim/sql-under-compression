@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 
-# A newer push stops the older smoke test of the same branch.
+# A newer run stops an older run of the same kind on the same branch.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -48,10 +48,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Show the machine
+      - name: Show the machine and make room on the disk
         run: |
           lscpu | grep -E "Model name|^CPU\(s\)|Thread|Core"
           free -h
+          # The 3 GB model lies on the disk three times while pruna converts it.
+          # These two folders hold tools that this job does not use.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
           df -h /
       - name: Install pruna and llama-cpp-python
         run: |
@@ -61,14 +64,19 @@ jobs:
       - name: "Step 1: download Spider"
         run: python fetch_spider.py data
       - name: "Step 2: compress the model with pruna"
-        run: python compress.py ${{ matrix.precision }} model
+        shell: bash  # with this line a failure of compress.py is not hidden by "tee"
+        run: |
+          python compress.py ${{ matrix.precision }} model 2>&1 | tee compress.log
+          # Keep what llama.cpp says about the memory of the weights.
+          grep "model buffer size" compress.log > results/${{ matrix.precision }}.llama_load.txt || true
+          df -h /
       - name: "Step 3: evaluate"
         run: python evaluate.py model data/spider "$QUESTIONS" results/${{ matrix.precision }}.json
-      - name: "Step 4: check pruna's evaluation tools"
+      - name: "Step 4: evaluate again with pruna's tools"
         run: >
-          python pruna_check.py model data/spider
+          python evaluate_with_pruna.py model data/spider
           results/${{ matrix.precision }}.json
-          results/${{ matrix.precision }}.pruna_check.json
+          results/${{ matrix.precision }}.pruna.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
