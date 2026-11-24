@@ -46,7 +46,7 @@ def test_change_counts_lost_and_gained_questions():
 
 def test_missing_precision_is_shown_as_missing():
     table = make_table({"f16": result([True])})
-    assert "| q8_0 | no result: this job did not finish |" in table
+    assert "| q8_0 | no result in this run |" in table
 
 
 def test_different_questions_are_not_compared():

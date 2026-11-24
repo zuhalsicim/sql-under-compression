@@ -1,8 +1,15 @@
 name: benchmark
 
-# The run is started by hand in the Actions tab. By default it is the full
-# run: 200 questions, all four precisions one after the other on one machine.
+# A push that changes code runs the smoke test: 5 questions, every precision on
+# its own machine, all at the same time.
+# The full run is started by hand in the Actions tab: 200 questions, all four
+# precisions one after the other on one machine.
 on:
+  push:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "results/**"
   workflow_dispatch:
     inputs:
       questions:

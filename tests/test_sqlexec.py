@@ -107,6 +107,14 @@ def test_check_answer_reports_sql_errors(db_path):
     assert note.startswith("SQLite error: no such column")
 
 
+def test_check_answer_counts_text_that_sqlite_refuses_as_wrong(db_path):
+    gold = "SELECT name FROM singer"
+    assert check_answer(db_path, "SELECT 1; SELECT 2", gold)[0] is False
+    assert check_answer(db_path, "SELECT 'a\0b'", gold)[0] is False
+    assert check_answer(db_path, "DROP TABLE singer", gold)[0] is False
+    assert run_query(db_path, "SELECT count(*) FROM singer") == [(4,)]
+
+
 def test_check_answer_rejects_an_empty_answer(db_path):
     # Without this rule an empty answer would match a gold query with no rows.
     gold = "SELECT name FROM singer WHERE age > 100"

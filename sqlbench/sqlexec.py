@@ -69,6 +69,6 @@ def check_answer(db_path: str | Path, predicted_sql: str, gold_sql: str) -> tupl
     gold_rows = run_query(db_path, gold_sql)
     try:
         predicted_rows = run_query(db_path, predicted_sql)
-    except sqlite3.Error as error:
+    except sqlite3.Error as error:  # wrong SQL, the time limit or the row limit
         return False, f"SQLite error: {error}"
     return same_result(predicted_rows, gold_rows, ordered=has_order_by(gold_sql)), ""

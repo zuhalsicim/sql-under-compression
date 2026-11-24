@@ -18,7 +18,7 @@ def make_table(results: dict[str, dict]) -> str:
 
 def _row(precision: str, result: dict | None, baseline: dict | None) -> str:
     if result is None:
-        return f"| {precision} | no result: this job did not finish | | | | | |"
+        return f"| {precision} | no result in this run | | | | | |"
     low, high = wilson_interval(result["correct"], result["questions"])
     share = result["correct"] / result["questions"]
     accuracy = f"{result['correct']}/{result['questions']} = {share:.1%} ({low:.1%} to {high:.1%})"
