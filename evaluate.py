@@ -114,11 +114,13 @@ def main() -> None:
     memory_after_generation = memory_status()
 
     # Part 2: run the generated SQL and compare it with the reference result.
+    scoring_start = time.perf_counter()
     for row in rows:
         row["sql"] = extract_sql(row["answer"])
         row["correct"], row["note"] = check_answer(
             database_of(row["index"]), row["sql"], all_questions[row["index"]]["query"]
         )
+    scoring_seconds = time.perf_counter() - scoring_start
 
     correct = sum(row["correct"] for row in rows)
     low, high = wilson_interval(correct, len(rows))
@@ -135,6 +137,8 @@ def main() -> None:
         "peak_memory_before_model_bytes": memory_before_model["VmHWM"],
         "memory_after_generation": memory_after_generation,
         "mean_seconds_per_question": sum(row["seconds"] for row in rows) / len(rows),
+        "generation_seconds_all_questions": sum(row["seconds"] for row in rows),
+        "scoring_seconds_all_questions": scoring_seconds,
         "tokens_per_second": sum(row["generation_steps"] for row in rows)
         / sum(row["generation_seconds"] for row in rows),
         "prompt_tokens_per_second": sum(row["prompt_tokens_read"] for row in rows)

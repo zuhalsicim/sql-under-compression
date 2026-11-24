@@ -11,6 +11,7 @@ metric and pruna's timing metric and records either the value or the error.
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pruna
@@ -71,7 +72,8 @@ def main() -> None:
 
     # The same questions, prompts and reference queries as in evaluate.py, in the same order.
     all_questions = json.loads((spider_dir / "dev.json").read_text(encoding="utf-8"))
-    rows = json.loads(result_path.read_text(encoding="utf-8"))["per_question"]
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    rows = result["per_question"]
     items = []
     for row in rows:
         question = all_questions[row["index"]]
@@ -93,8 +95,12 @@ def main() -> None:
         return agent.evaluate(model)[0].result
 
     # 1. Execution accuracy on all questions, as a custom metric inside pruna's EvaluationAgent.
+    # This repeats the work of evaluate.py on the same machine, so the time it
+    # takes also shows how steady the speed of the machine is.
     accuracy_metric = ExecutionAccuracy()
+    start = time.perf_counter()
     accuracy = attempt(lambda: run(accuracy_metric))
+    seconds_with_pruna = time.perf_counter() - start
     expected = [row["correct"] for row in rows]
     different = sum(a != b for a, b in zip(accuracy_metric.last_outcomes, expected))
 
@@ -112,6 +118,9 @@ def main() -> None:
         "execution_accuracy_with_evaluate_py": sum(expected) / len(expected),
         "questions_scored_by_pruna": len(accuracy_metric.last_outcomes),
         "questions_with_a_different_outcome": different,
+        "seconds_for_all_questions_with_pruna": seconds_with_pruna,
+        "seconds_for_all_questions_with_evaluate_py": result["generation_seconds_all_questions"]
+        + result["scoring_seconds_all_questions"],
         "inference_memory_with_pruna": memory,
         "latency_ms_with_pruna": latency,
         "latency_ms_with_evaluate_py": 1000 * sum(row["seconds"] for row in rows[:few]) / few,

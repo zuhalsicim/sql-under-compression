@@ -1,4 +1,4 @@
-from sqlbench.report import describe_runners, make_table
+from sqlbench.report import describe_memory, describe_runners, describe_second_pass, make_table
 
 
 def result(correct_flags, size=1_000_000_000):
@@ -64,3 +64,35 @@ def test_precisions_measured_on_the_same_machine_share_a_line():
         '- f16, q4_k_m: runner "Runner 1", Test CPU, 2 vCPU, 8.0 GB RAM, ubuntu24\n'
         '- q8_0: runner "Runner 2", Test CPU, 2 vCPU, 8.0 GB RAM, ubuntu24\n'
     )
+
+
+def test_memory_lines_split_mapped_file_and_allocated_memory():
+    one = result([True])
+    one["memory_after_generation"] = {"RssFile": 1_000_000_000, "RssAnon": 930_000_000}
+    assert describe_memory({"q4_k_m": one}) == (
+        "- q4_k_m: 1.00 GB model file mapped into memory, 0.93 GB allocated by the process\n"
+    )
+
+
+def second_pass(share, different=0):
+    """A file like evaluate_with_pruna.py writes it, with made-up numbers."""
+    return {
+        "execution_accuracy_with_pruna": {"works": True, "value": share},
+        "questions_with_a_different_outcome": different,
+        "seconds_for_all_questions_with_evaluate_py": 40.0,
+        "seconds_for_all_questions_with_pruna": 42.0,
+    }
+
+
+def test_second_pass_line_compares_counts_and_time():
+    text = describe_second_pass({"f16": result([True, True, True, False])}, {"f16": second_pass(0.75)})
+    assert text == (
+        "- f16: evaluate.py 3 correct, pruna 3 correct, 0 questions with a different outcome; "
+        "10.0 s per question in the first pass, 10.5 s in the second\n"
+    )
+
+
+def test_second_pass_line_shows_an_error_of_pruna():
+    failed = {"execution_accuracy_with_pruna": {"works": False, "error": "ValueError: no"}}
+    text = describe_second_pass({"f16": result([True])}, {"f16": failed})
+    assert text == "- f16: pruna's EvaluationAgent failed: ValueError: no\n"

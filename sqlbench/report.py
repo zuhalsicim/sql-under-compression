@@ -61,3 +61,37 @@ def describe_runners(results: dict[str, dict]) -> str:
             )
             precisions_on.setdefault(machine, []).append(precision)
     return "".join(f"- {', '.join(names)}: {machine}\n" for machine, names in precisions_on.items())
+
+
+def describe_memory(results: dict[str, dict]) -> str:
+    """Return one line per precision that splits the memory held after generation into two parts."""
+    lines = []
+    for precision in PRECISIONS:
+        if precision in results:
+            memory = results[precision]["memory_after_generation"]
+            lines.append(
+                f"- {precision}: {memory['RssFile'] / 1e9:.2f} GB model file mapped into memory, "
+                f"{memory['RssAnon'] / 1e9:.2f} GB allocated by the process\n"
+            )
+    return "".join(lines)
+
+
+def describe_second_pass(results: dict[str, dict], second_passes: dict[str, dict]) -> str:
+    """Return one line per precision that compares evaluate.py with the second pass through pruna."""
+    lines = []
+    for precision in PRECISIONS:
+        if precision in results and precision in second_passes:
+            first, second = results[precision], second_passes[precision]
+            accuracy = second["execution_accuracy_with_pruna"]
+            if not accuracy["works"]:
+                lines.append(f"- {precision}: pruna's EvaluationAgent failed: {accuracy['error']}\n")
+                continue
+            questions = first["questions"]
+            lines.append(
+                f"- {precision}: evaluate.py {first['correct']} correct, "
+                f"pruna {round(accuracy['value'] * questions)} correct, "
+                f"{second['questions_with_a_different_outcome']} questions with a different outcome; "
+                f"{second['seconds_for_all_questions_with_evaluate_py'] / questions:.1f} s per question "
+                f"in the first pass, {second['seconds_for_all_questions_with_pruna'] / questions:.1f} s in the second\n"
+            )
+    return "".join(lines)
