@@ -1,0 +1,13 @@
+# Packages for the GitHub runner (Linux, CPU only). Not needed for the unit tests.
+
+# PyTorch without the GPU libraries.
+--extra-index-url https://download.pytorch.org/whl/cpu
+# Ready-built CPU wheels of llama-cpp-python, so nothing is compiled on the runner.
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+--only-binary llama-cpp-python
+
+pruna==0.3.5
+# The newest llama-cpp-python that existed when pruna 0.3.5 was released.
+llama-cpp-python==0.3.36
+# Needed by the llama.cpp conversion script that pruna downloads.
+gguf==0.19.0

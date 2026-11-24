@@ -1,0 +1,101 @@
+name: benchmark
+
+# The run is started by hand in the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      questions:
+        description: "Number of questions (200 = full run, 5 = smoke test)"
+        default: "200"
+      precisions:
+        description: "Precisions to run, as a JSON list"
+        default: '["f16", "q8_0", "q5_k_m", "q4_k_m"]'
+
+permissions:
+  contents: read
+
+# A newer push stops the older smoke test of the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QUESTIONS: ${{ inputs.questions || '5' }}
+  # pruna sends anonymous usage data unless this is set.
+  PRUNA_METRICS_ENABLED: "false"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  benchmark:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        precision: ${{ fromJSON(inputs.precisions || '["f16", "q8_0", "q5_k_m", "q4_k_m"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Show the machine
+        run: |
+          lscpu | grep -E "Model name|^CPU\(s\)|Thread|Core"
+          free -h
+          df -h /
+      - name: Install pruna and llama-cpp-python
+        run: |
+          pip install -r requirements.txt
+          mkdir results
+          pip freeze > results/${{ matrix.precision }}.pip-freeze.txt
+      - name: "Step 1: download Spider"
+        run: python fetch_spider.py data
+      - name: "Step 2: compress the model with pruna"
+        run: python compress.py ${{ matrix.precision }} model
+      - name: "Step 3: evaluate"
+        run: python evaluate.py model data/spider "$QUESTIONS" results/${{ matrix.precision }}.json
+      - name: "Step 4: check pruna's evaluation tools"
+        run: >
+          python pruna_check.py model data/spider
+          results/${{ matrix.precision }}.json
+          results/${{ matrix.precision }}.pruna_check.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results-${{ matrix.precision }}
+          path: results/
+
+  table:
+    needs: benchmark
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: results-*
+          path: results
+          merge-multiple: true
+      - name: "Step 5: make the table"
+        run: |
+          echo "Questions per precision: $QUESTIONS" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python make_table.py results >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: results
+          path: results/
