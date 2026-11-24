@@ -45,6 +45,7 @@ def runner_info() -> dict:
     cpu_model = next(line.split(":", 1)[1].strip() for line in cpu_lines if line.startswith("model name"))
     memory_kilobytes = int(Path("/proc/meminfo").read_text().split()[1])  # first line is "MemTotal: <n> kB"
     return {
+        "name": os.environ.get("RUNNER_NAME", "unknown"),  # GitHub gives every machine of a run its own name
         "cpu_model": cpu_model,
         "cpu_count": os.cpu_count(),
         "memory_bytes": memory_kilobytes * 1024,

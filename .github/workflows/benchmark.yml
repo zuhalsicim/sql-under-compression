@@ -1,15 +1,16 @@
 name: benchmark
 
-# The run is started by hand in the Actions tab.
+# The run is started by hand in the Actions tab. By default it is the full
+# run: 200 questions, all four precisions one after the other on one machine.
 on:
   workflow_dispatch:
     inputs:
       questions:
         description: "Number of questions (200 = full run, 5 = smoke test)"
         default: "200"
-      precisions:
-        description: "Precisions to run, as a JSON list"
-        default: '["f16", "q8_0", "q5_k_m", "q4_k_m"]'
+      machines:
+        description: "JSON list with one entry per machine: the precisions that run on it"
+        default: '["f16 q8_0 q5_k_m q4_k_m"]'
 
 permissions:
   contents: read
@@ -42,7 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        precision: ${{ fromJSON(inputs.precisions || '["f16", "q8_0", "q5_k_m", "q4_k_m"]') }}
+        # Without an input (the smoke test) every precision gets its own machine.
+        precisions: ${{ fromJSON(inputs.machines || '["f16", "q8_0", "q5_k_m", "q4_k_m"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -60,27 +62,29 @@ jobs:
         run: |
           pip install -r requirements.txt
           mkdir results
-          pip freeze > results/${{ matrix.precision }}.pip-freeze.txt
+          pip freeze > results/pip-freeze-machine-${{ strategy.job-index }}.txt
       - name: "Step 1: download Spider"
         run: python fetch_spider.py data
-      - name: "Step 2: compress the model with pruna"
+      - name: "Steps 2 to 4 for every precision of this machine"
         shell: bash  # with this line a failure of compress.py is not hidden by "tee"
+        env:
+          PRECISIONS: ${{ matrix.precisions }}
         run: |
-          python compress.py ${{ matrix.precision }} model 2>&1 | tee compress.log
-          # Keep what llama.cpp says about the memory of the weights.
-          grep "model buffer size" compress.log > results/${{ matrix.precision }}.llama_load.txt || true
-          df -h /
-      - name: "Step 3: evaluate"
-        run: python evaluate.py model data/spider "$QUESTIONS" results/${{ matrix.precision }}.json
-      - name: "Step 4: evaluate again with pruna's tools"
-        run: >
-          python evaluate_with_pruna.py model data/spider
-          results/${{ matrix.precision }}.json
-          results/${{ matrix.precision }}.pruna.json
+          for precision in $PRECISIONS; do
+            # Step 2: compress the model with pruna.
+            python compress.py $precision model 2>&1 | tee compress.log
+            # Keep what llama.cpp says about the memory of the weights.
+            grep "model buffer size" compress.log > results/$precision.llama_load.txt || true
+            # Step 3: evaluate.
+            python evaluate.py model data/spider "$QUESTIONS" results/$precision.json
+            # Step 4: evaluate again with pruna's tools.
+            python evaluate_with_pruna.py model data/spider results/$precision.json results/$precision.pruna.json
+            rm -rf model
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: results-${{ matrix.precision }}
+          name: results-machine-${{ strategy.job-index }}
           path: results/
 
   table:
@@ -94,7 +98,7 @@ jobs:
           python-version: "3.12"
       - uses: actions/download-artifact@v8
         with:
-          pattern: results-*
+          pattern: results-machine-*
           path: results
           merge-multiple: true
       - name: "Step 5: make the table"

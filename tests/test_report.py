@@ -11,7 +11,13 @@ def result(correct_flags, size=1_000_000_000):
         "tokens_per_second": 12.34,
         "mean_seconds_per_question": 5.67,
         "per_question": [{"index": i, "correct": flag} for i, flag in enumerate(correct_flags)],
-        "runner": {"cpu_model": "Test CPU", "cpu_count": 2, "memory_bytes": 8_000_000_000, "image": "ubuntu24"},
+        "runner": {
+            "name": "Runner 1",
+            "cpu_model": "Test CPU",
+            "cpu_count": 2,
+            "memory_bytes": 8_000_000_000,
+            "image": "ubuntu24",
+        },
     }
 
 
@@ -50,6 +56,11 @@ def test_different_questions_are_not_compared():
     assert "not comparable: different questions" in table
 
 
-def test_runner_lines():
-    text = describe_runners({"f16": result([True])})
-    assert text == "- f16: Test CPU, 2 vCPU, 8.0 GB RAM, ubuntu24\n"
+def test_precisions_measured_on_the_same_machine_share_a_line():
+    other = result([True])
+    other["runner"]["name"] = "Runner 2"
+    text = describe_runners({"f16": result([True]), "q8_0": other, "q4_k_m": result([True])})
+    assert text == (
+        '- f16, q4_k_m: runner "Runner 1", Test CPU, 2 vCPU, 8.0 GB RAM, ubuntu24\n'
+        '- q8_0: runner "Runner 2", Test CPU, 2 vCPU, 8.0 GB RAM, ubuntu24\n'
+    )

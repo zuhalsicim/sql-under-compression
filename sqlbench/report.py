@@ -50,13 +50,14 @@ def _change(precision: str, result: dict, baseline: dict | None) -> str:
 
 
 def describe_runners(results: dict[str, dict]) -> str:
-    """Return one line per precision that says which machine measured it."""
-    lines = []
+    """Return one line per machine, with the precisions measured on it."""
+    precisions_on = {}
     for precision in PRECISIONS:
         if precision in results:
             runner = results[precision]["runner"]
-            lines.append(
-                f"- {precision}: {runner['cpu_model']}, {runner['cpu_count']} vCPU, "
+            machine = (
+                f"runner \"{runner['name']}\", {runner['cpu_model']}, {runner['cpu_count']} vCPU, "
                 f"{runner['memory_bytes'] / 1e9:.1f} GB RAM, {runner['image']}"
             )
-    return "\n".join(lines) + "\n"
+            precisions_on.setdefault(machine, []).append(precision)
+    return "".join(f"- {', '.join(names)}: {machine}\n" for machine, names in precisions_on.items())
