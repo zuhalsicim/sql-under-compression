@@ -15,6 +15,7 @@ from pathlib import Path
 
 import llama_cpp
 
+from sqlbench.checksum import sha256_of_file
 from sqlbench.prompt import build_prompt, read_schema
 from sqlbench.sampling import choose_indices
 from sqlbench.settings import MAX_TOKENS, N_CTX, SEED
@@ -128,6 +129,8 @@ def main() -> None:
         "compression": json.loads((model_dir / "compression.json").read_text(encoding="utf-8")),
         "gguf_file_type": llm.metadata.get("general.file_type"),  # llama.cpp's number for the precision
         "file_size_bytes": model_path.stat().st_size,
+        # Computed here, after memory and time were measured, so that it disturbs neither.
+        "model_sha256": sha256_of_file(model_path),
         "questions": len(rows),
         "seed": SEED,
         "correct": correct,

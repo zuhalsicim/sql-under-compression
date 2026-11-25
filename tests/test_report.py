@@ -2,6 +2,7 @@ from sqlbench.report import (
     describe_agreement,
     describe_differences,
     describe_memory,
+    describe_model_files,
     describe_runners,
     describe_second_pass,
     make_table,
@@ -169,3 +170,29 @@ def test_a_very_small_p_value_is_not_printed_as_zero():
     results = {"f16": result([True] * 20), "q4_k_m": result([False] * 20)}
     row = make_table(results).splitlines()[-1]
     assert row.endswith("| -100.0 points (lost 20, gained 0, p < 0.001) |")
+
+
+def test_model_files_with_the_same_checksum():
+    first, second = result([True]), result([True])
+    first["model_sha256"] = second["model_sha256"] = "ab" * 32
+    assert describe_model_files({"q4_k_m": first}, {"q4_k_m": second}) == (
+        f"- q4_k_m: the same model file in both runs (SHA-256 {'ab' * 32}).\n"
+    )
+
+
+def test_model_files_with_different_checksums():
+    first, second = result([True]), result([True])
+    first["model_sha256"], second["model_sha256"] = "ab" * 32, "cd" * 32
+    text = describe_model_files({"q4_k_m": first}, {"q4_k_m": second})
+    assert text == f"- q4_k_m: different model files (SHA-256 {'ab' * 32} and {'cd' * 32}).\n"
+
+
+def test_model_files_cannot_be_compared_without_a_checksum():
+    second = result([True])
+    second["model_sha256"] = "ab" * 32
+    text = describe_model_files({"q4_k_m": result([True])}, {"q4_k_m": second})
+    assert text == "- q4_k_m: cannot be compared, a run without checksum is involved.\n"
+
+
+def test_model_files_only_for_precisions_in_both_runs():
+    assert describe_model_files({"f16": result([True])}, {"q4_k_m": result([True])}) == ""

@@ -162,3 +162,22 @@ def describe_agreement(first: dict[str, dict], second: dict[str, dict]) -> str:
                 f"{same_answer} got the same answer text, {same_outcome} got the same outcome.\n"
             )
     return "".join(lines)
+
+
+def describe_model_files(first: dict[str, dict], second: dict[str, dict]) -> str:
+    """Return one line per precision that says whether two runs used exactly the same model file.
+
+    The result files of the first two published runs hold no checksum.
+    """
+    lines = []
+    for precision in PRECISIONS:
+        if precision in first and precision in second:
+            one = first[precision].get("model_sha256")
+            two = second[precision].get("model_sha256")
+            if one is None or two is None:
+                lines.append(f"- {precision}: cannot be compared, a run without checksum is involved.\n")
+            elif one == two:
+                lines.append(f"- {precision}: the same model file in both runs (SHA-256 {one}).\n")
+            else:
+                lines.append(f"- {precision}: different model files (SHA-256 {one} and {two}).\n")
+    return "".join(lines)
