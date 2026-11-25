@@ -59,7 +59,13 @@ def _change(precision: str, result: dict, baseline: dict | None) -> str:
     lost = sum(1 for index in before if before[index] and not after[index])
     gained = sum(1 for index in before if after[index] and not before[index])
     points = 100 * (gained - lost) / len(before)
-    return f"{points:+.1f} points (lost {lost}, gained {gained}, p = {sign_test(lost, gained):.3f})"
+    return f"{points:+.1f} points (lost {lost}, gained {gained}, {_p_value(lost, gained)})"
+
+
+def _p_value(lost: int, gained: int) -> str:
+    """Return the p-value of the sign test as text. A very small value is not printed as 0.000."""
+    p = sign_test(lost, gained)
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
 
 
 def describe_runners(results: dict[str, dict]) -> str:
@@ -136,7 +142,7 @@ def describe_differences(results: dict[str, dict]) -> str:
         lines.append(
             f"- {precision}: {other_text} of {len(before)} answers have another SQL text than {BASELINE}. "
             f"{lost + gained} of them change the outcome: {lost} lost, {gained} gained, "
-            f"p = {sign_test(lost, gained):.3f}. With {lost + gained} such questions {needed}.\n"
+            f"{_p_value(lost, gained)}. With {lost + gained} such questions {needed}.\n"
         )
     return "".join(lines)
 

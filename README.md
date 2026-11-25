@@ -5,31 +5,35 @@ how many correct SQL answers does it lose, and what does it save in file size, m
 
 ## Results
 
-Model: Qwen2.5-Coder-1.5B-Instruct. Questions: 200 from the Spider development set.
+Model: Qwen2.5-Coder-1.5B-Instruct. Questions: the Spider development set.
 An answer is correct if its SQL, run on the SQLite database, returns the same result as the reference query.
 
 | Precision | File size | Peak memory | Tokens per second | Seconds per question | Execution accuracy (95 % interval) | Change against f16 |
 |---|---|---|---|---|---|---|
-| f16 | 3.09 GB | 3.53 GB | 7.9 | 5.2 | 118/200 = 59.0% (52.1% to 65.6%) | baseline |
-| q8_0 | 1.65 GB | 2.08 GB | 12.6 | 3.3 | 119/200 = 59.5% (52.6% to 66.1%) | +0.5 points (lost 1, gained 2, p = 1.000) |
-| q5_k_m | 1.13 GB | 1.56 GB | 12.1 | 3.1 | 123/200 = 61.5% (54.6% to 68.0%) | +2.5 points (lost 1, gained 6, p = 0.125) |
-| q4_k_m | 0.99 GB | 2.03 GB | 20.4 | 2.3 | 114/200 = 57.0% (50.1% to 63.7%) | -2.0 points (lost 9, gained 5, p = 0.424) |
+| f16 | 3.09 GB | 3.53 GB | 7.9 | 5.2 | 647/1034 = 62.6% (59.6% to 65.5%) | baseline |
+| q8_0 | 1.65 GB | 2.08 GB | 12.6 | 3.3 | 646/1034 = 62.5% (59.5% to 65.4%) | -0.1 points (lost 6, gained 5, p = 1.000) |
+| q5_k_m | 1.13 GB | 1.56 GB | 12.1 | 3.1 | 653/1034 = 63.2% (60.2% to 66.0%) | +0.6 points (lost 14, gained 20, p = 0.392) |
+| q4_k_m | 0.99 GB | 2.03 GB | 20.4 | 2.3 | 614/1034 = 59.4% (56.4% to 62.3%) | -3.2 points (lost 59, gained 26, p < 0.001) |
 
-All numbers come from one run: [Actions run 45508785082](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45508785082), 24 to 25 November 2026, commit `f6682bf`.
-The four precisions ran one after the other on one GitHub-hosted machine: AMD EPYC 9V45, 2 virtual CPUs, 8.3 GB RAM, no GPU, image `ubuntu26 20261116.202.1`.
-The result files are in `results/`.
+The table comes from two runs. `python make_table.py results results-full-dev` prints it.
 
-The last column is paired: each precision is compared with f16 on the same 200 questions, one by one.
+- **File size, peak memory, tokens per second, seconds per question**: [run 45508785082](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45508785082), 24 to 25 November 2026, commit `f6682bf`.
+  200 questions, all four precisions one after the other on one GitHub-hosted machine: AMD EPYC 9V45, 2 virtual CPUs, 8.3 GB RAM, no GPU, image `ubuntu26 20261116.202.1`. The result files are in `results/`.
+- **Execution accuracy and change against f16**: [run 45529640714](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45529640714), 25 November 2026, commit `1df0342`.
+  All 1034 questions of the development set, each precision on its own machine. The result files are in `results-full-dev/`.
+
+The last column is paired: each precision is compared with f16 on the same 1034 questions, one by one.
 `p` is from an exact two-sided sign test on the questions where the two differ: the chance of a split between lost and gained at least this uneven, if both versions were equally good.
-The p-values were computed afterwards from the same result files.
 
 What the numbers say, and what they do not say:
 
-- The q4_k_m file is a third of the f16 file. On this machine the compressed versions generated 1.5 to 2.6 times as many tokens per second as f16.
-- Accuracy stayed between 57 % and 61.5 %. With 200 questions each interval is about 13.5 points wide. So the run shows no loss from compression, and it cannot rule out a loss of a few points.
-- The numbers do not say that q5_k_m is better than f16 or that q4_k_m is worse. Compression changed answers in both directions: q4_k_m lost 9 questions and gained 5. In the paired test no difference is below the usual line of 0.05 (p = 1.000, 0.125 and 0.424), so each of them can come from chance. That is not proof that the versions are equally good.
-- Memory does not follow file size. q4_k_m needed more memory than q5_k_m, because llama.cpp kept a second, re-arranged copy of about two thirds of the q4_k_m weights in RAM (see Limits).
-- Speed was measured once, on one shared machine. It is not a general statement about these files (see Limits).
+- **Size and speed.** The q4_k_m file is a third of the f16 file. On one machine the compressed versions generated 1.5 to 2.6 times as many tokens per second as f16.
+- **8 bits and the 5-bit mix cost no accuracy that this run can see.** q8_0 answered 646 of 1034 questions correctly and q5_k_m 653, against 647 for f16. Lost and gained questions are close to balanced: 6 to 5, and 14 to 20.
+- **The 4-bit mix costs about 3 points.** q4_k_m answered 614 correctly. It lost 59 questions that f16 got right and gained 26. Fair coin tosses give a split this uneven less than once in a thousand tries (p < 0.001).
+- **What the run could have seen.** Each interval is about 6 points wide. The paired test is finer. With the number of answers that really changed, a net loss of 9 questions (0.9 points) for q8_0, of 14 questions (1.4 points) for q5_k_m and of 21 questions (2.0 points) for q4_k_m would have fallen below 0.05. A smaller loss can hide in this run. So "no loss that this run can see" does not mean "no loss".
+- **One doubt about the 3 points.** In the accuracy run q4_k_m and f16 ran on different machines, and q4_k_m did not repeat its own answers exactly: of the 200 questions that both runs asked, it gave 11 another answer text and 2 another outcome. The other three precisions repeated all 200 answers exactly. A net loss of 33 questions is far more than that, but it is noise in the comparison (see Limits).
+- **Memory does not follow file size.** q4_k_m needed more memory than q5_k_m, because llama.cpp kept a second, re-arranged copy of about two thirds of the q4_k_m weights in RAM (see Limits).
+- **Speed was measured once, on one shared machine.** It is not a general statement about these files (see Limits).
 
 ## Method
 
@@ -59,7 +63,7 @@ The original model itself was not evaluated.
 ### Questions and prompt
 
 The questions come from the development set of [Spider](https://yale-lily.github.io/spider): 1034 questions about 20 SQLite databases.
-The benchmark asks 200 of them, chosen at random with a fixed seed (42). Every precision gets the same 200. They cover 18 of the 20 databases.
+The accuracy run asks all 1034. The run for size, memory and speed asks 200 of them, chosen at random with a fixed seed (42); these 200 cover 18 of the 20 databases. Within a run every precision gets the same questions.
 
 The prompt has three parts: one fixed instruction, the `CREATE TABLE` statements of the database, and the question.
 It contains no example rows and no example answers.
@@ -91,9 +95,9 @@ Compressed with pruna. Measured by `evaluate.py`, a script in this repository th
 - **Execution accuracy**: correct answers divided by questions, with the Wilson 95 % interval.
 - **Change against f16**: the same questions are compared one by one. "Lost" are questions that f16 answered correctly and this precision did not. "Gained" is the reverse. `p` is the exact two-sided sign test on these two counts (`sign_test` in `sqlbench/stats.py`). Questions that both versions got right, or both got wrong, do not enter the test. If both versions were equally good, a question where they differ would be lost or gained with the same chance, like a coin toss. `p` is the chance that coin tosses split at least as unevenly as the two counts. For right-or-wrong answers this is the same as the exact McNemar test.
 
-pruna has its own evaluation tools. `evaluate_with_pruna.py` tried them on the same model files in the same run:
+pruna has its own evaluation tools. `evaluate_with_pruna.py` tried them on the same model files in the 200-question run:
 
-- **Accuracy: works.** pruna's `EvaluationAgent` ran the llama.cpp model with a custom metric. It asked all 200 questions again for every precision. Every single question got the same outcome as in `evaluate.py`. So the accuracy column is confirmed by pruna's own tool.
+- **Accuracy: works.** pruna's `EvaluationAgent` ran the llama.cpp model with a custom metric. It asked all 200 questions again for every precision. Every single question got the same outcome as in `evaluate.py`. So pruna's own tool confirms how `evaluate.py` scores. The accuracy run with 1034 questions used `evaluate.py` alone.
 - **Memory: does not work on a CPU.** pruna's memory metrics measure GPU memory. `inference_memory` stopped with the error `Memory metrics does not support device cpu. Must be one of ['cuda'].`
 - **Speed: works in part.** pruna's `latency` metric ran and gives milliseconds per call. pruna 0.3.5 has no metric for generated tokens per second.
 - **The measuring process must stay small.** A Python process that had imported pruna held 0.80 GB of RAM before any model was loaded. `evaluate.py` held 0.06 GB at that point.
@@ -105,9 +109,10 @@ That is why file size, memory and speed come from `evaluate.py` and not from pru
 GitHub Actions, `ubuntu-latest`, no GPU. This repository is private, so GitHub gives each job 2 virtual CPUs and 8 GB RAM.
 
 - A push that changes code starts the smoke test: 5 questions, each precision on its own machine.
-- The full run is started by hand: 200 questions, all four precisions one after the other on one machine.
+- The run for size, memory and speed is started by hand: 200 questions, all four precisions one after the other on one machine, with the second pass through pruna.
+- The accuracy run is started by hand: all 1034 questions, each precision on its own machine, without the second pass.
 
-The full run uses one machine because the machines differ.
+The run for speed uses one machine because the machines differ.
 In three smoke tests the same f16 file and the same 5 questions gave 4.3, 7.5 and 7.8 generated tokens per second on three machines with three different CPUs
 (runs [45505572223](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45505572223),
 [45500240706](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45500240706) and
@@ -116,7 +121,9 @@ A comparison across machines would mix this with the effect of compression.
 
 ## Limits
 
-- **One small model, one dataset, 200 questions.** Each accuracy interval is about 13.5 points wide. A real difference of a few points between two precisions cannot be seen with this sample. The sign test is weak for the same reason: few questions differ. With the 14 differing questions of q4_k_m, the split would have to be 12 to 2 or more uneven to fall below 0.05.
+- **One small model, one dataset.** With 1034 questions each accuracy interval is about 6 points wide. The sign test sees a difference only if the differing questions split unevenly enough: at least 10 to 1 for the 11 differing questions of q8_0, at least 24 to 10 for the 34 of q5_k_m, at least 53 to 32 for the 85 of q4_k_m. So a loss of about 1 point for q8_0, or of 1.4 points for q5_k_m, could not have been seen. The observed split of q4_k_m was 59 to 26.
+- **The first run had only 200 questions and could not see the loss of q4_k_m.** There f16, q8_0, q5_k_m and q4_k_m answered 118, 119, 123 and 114 of 200 correctly, and no difference was below 0.05 (p = 1.000, 0.125 and 0.424). `python make_table.py results` prints that table.
+- **The accuracy run used four machines, and q4_k_m does not repeat itself exactly.** The 200 questions of the first run are part of the 1034. f16, q8_0 and q5_k_m gave all 200 the same answer text in both runs. q4_k_m gave 189 the same text and 198 the same outcome. The two runs differ in the machine and in the questions asked before each question. The machine alone does not explain it: q5_k_m and f16 also ran on another kind of CPU than in the first run and repeated every answer. This benchmark did not find the cause. The result files hold no checksum of the model file, so a difference in the q4_k_m file itself is not ruled out. For the table this means: a few of the 85 differing questions of q4_k_m may differ for this reason and not because of the precision.
 - **Speed is one run on one shared machine.** Other users of the same hardware can slow it down. Within the run the speed was steady: the second pass over the same questions (through pruna) took 5.1, 3.2, 3.1 and 2.4 seconds per question for f16, q8_0, q5_k_m and q4_k_m, against 5.2, 3.3, 3.1 and 2.3 in the first pass. On another machine the numbers will be different, and the order of q8_0 and q5_k_m may be different too.
 - **Seconds per question depends on the order of the questions.** The questions are asked in the order of the dataset, database by database. llama.cpp keeps the last prompt in a cache, so it reads the schema once per database and not once per question. In the smoke test every one of the 5 questions is about another database. There f16 needed between 27.7 and 31.7 seconds per question.
 - **Peak memory counts the model file that is mapped into memory.** The system can drop such pages when RAM gets short and read them again later. After the last question the memory was split like this (`RssFile` and `RssAnon` in the result files):
@@ -128,12 +135,13 @@ A comparison across machines would mix this with the effect of compression.
 - **The f16 file is the baseline, not the original model.** See Compression above.
 - **Execution accuracy is not a perfect judge.** A wrong query can return the right rows by chance. A right query with another column order counts as wrong. The reference queries of Spider are used as they are.
 - **The prompt shows the schema only.** The model does not see any stored values.
-- **Answers may depend on the CPU.** In the smoke tests each file gave the same 5 answers on every machine it ran on. Whether all 200 answers would be the same on another CPU was not tested.
 
 ## How to reproduce
 
 On GitHub: put this repository into your own account, open the Actions tab, choose "benchmark" and press "Run workflow".
-The defaults start the full run. It took 1 hour and 49 minutes. The table appears in the summary of the run. The result files are in the artifact `results`.
+The defaults start the run for size, memory and speed (200 questions, one machine). It took 1 hour and 49 minutes.
+For the accuracy run set `questions` to `1034`, `machines` to `["f16", "q8_0", "q5_k_m", "q4_k_m"]` and `second_pass` to `no`. It took 1 hour and 41 minutes on four machines at the same time.
+The table appears in the summary of the run. The result files are in the artifact `results`.
 
 On a Linux machine with Python 3.12:
 
@@ -146,8 +154,7 @@ python evaluate_with_pruna.py model data/spider output/q4_k_m.json output/q4_k_m
 python make_table.py output
 ```
 
-A new run writes to `output/`. The folder `results/` holds the published full run and stays as it is.
-`python make_table.py results` prints the table above again.
+A new run writes to `output/`. The folders `results/` and `results-full-dev/` hold the two published runs and stay as they are.
 
 These steps were only ever run on the GitHub machines described above.
 
@@ -163,7 +170,7 @@ pytest
 | File | What it does |
 |---|---|
 | `sqlbench/settings.py` | Every fixed choice: model, data, seed, precisions. |
-| `sqlbench/sampling.py` | Chooses the 200 questions. |
+| `sqlbench/sampling.py` | Chooses the questions. |
 | `sqlbench/prompt.py` | Reads the schema of a database and builds the prompt. |
 | `sqlbench/sqlclean.py` | Cuts the answer of the model down to one SQL statement. |
 | `sqlbench/sqlexec.py` | Runs SQL and decides whether two results are the same. |
@@ -177,7 +184,8 @@ pytest
 | `tests/` | Unit tests for the code in `sqlbench/`. |
 | `requirements.txt`, `requirements-dev.txt` | The packages for the GitHub machine, and for the unit tests. |
 | `.github/workflows/benchmark.yml` | Runs the unit tests and the five steps on GitHub. |
-| `results/` | The result files of the full run behind the table, and the package versions it used. |
+| `results/` | The result files of the 200-question run (size, memory, speed), and the package versions it used. |
+| `results-full-dev/` | The result files of the accuracy run with all 1034 questions. |
 
 ## Sources and licences
 

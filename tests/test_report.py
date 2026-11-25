@@ -163,3 +163,9 @@ def test_agreement_looks_only_at_questions_in_both_runs():
     assert describe_agreement({"f16": first}, {"f16": second}) == (
         "- f16: 2 questions are in both runs. 1 got the same answer text, 2 got the same outcome.\n"
     )
+
+
+def test_a_very_small_p_value_is_not_printed_as_zero():
+    results = {"f16": result([True] * 20), "q4_k_m": result([False] * 20)}
+    row = make_table(results).splitlines()[-1]
+    assert row.endswith("| -100.0 points (lost 20, gained 0, p < 0.001) |")
