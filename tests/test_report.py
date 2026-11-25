@@ -1,4 +1,11 @@
-from sqlbench.report import describe_memory, describe_runners, describe_second_pass, make_table
+from sqlbench.report import (
+    describe_agreement,
+    describe_differences,
+    describe_memory,
+    describe_runners,
+    describe_second_pass,
+    make_table,
+)
 
 
 def result(correct_flags, size=1_000_000_000):
@@ -105,3 +112,54 @@ def test_second_pass_line_shows_an_error_of_pruna():
     failed = {"execution_accuracy_with_pruna": {"works": False, "error": "ValueError: no"}}
     text = describe_second_pass({"f16": result([True])}, {"f16": failed})
     assert text == "- f16: pruna's EvaluationAgent failed: ValueError: no\n"
+
+
+def answers(rows):
+    """A result file with an answer text and an outcome per question, with made-up content."""
+    one = result([correct for _, correct in rows])
+    for row, (text, _) in zip(one["per_question"], rows):
+        row["answer"] = row["sql"] = text
+    return one
+
+
+def test_accuracy_columns_can_come_from_a_second_run():
+    first = {"f16": result([True, True], size=3_000_000_000), "q8_0": result([True, True], size=1_500_000_000)}
+    second = {"f16": result([True, True, True, False]), "q8_0": result([True, False, False, False])}
+    rows = make_table(first, second).splitlines()[2:4]
+    assert "| 3.00 GB |" in rows[0] and "3/4 = 75.0%" in rows[0]
+    assert "| 1.50 GB |" in rows[1] and "1/4 = 25.0%" in rows[1]
+    assert rows[1].endswith("| -50.0 points (lost 2, gained 0, p = 0.500) |")
+
+
+def test_precision_missing_in_the_second_run_is_shown_as_missing():
+    table = make_table({"f16": result([True]), "q8_0": result([True])}, {"f16": result([True])})
+    assert "| q8_0 | no result in this run |" in table
+
+
+def test_differences_count_other_text_and_changed_outcomes():
+    results = {
+        "f16": answers([("SELECT 1", True), ("SELECT 2", True), ("SELECT 3", False), ("SELECT 4", True)]),
+        "q4_k_m": answers([("SELECT 1", True), ("SELECT two", True), ("SELECT three", True), ("SELECT four", False)]),
+    }
+    assert describe_differences(results) == (
+        "- q4_k_m: 3 of 4 answers have another SQL text than f16. "
+        "2 of them change the outcome: 1 lost, 1 gained, p = 1.000. "
+        "With 2 such questions no split can fall below 0.05.\n"
+    )
+
+
+def test_differences_say_which_split_would_be_needed():
+    f16 = answers([(f"SELECT {i}", True) for i in range(14)])
+    q8_0 = answers([(f"SELECT {i} + 0", i >= 9) for i in range(14)])
+    text = describe_differences({"f16": f16, "q8_0": q8_0})
+    assert "14 of 14 answers have another SQL text than f16." in text
+    assert "9 of them change the outcome: 9 lost, 0 gained, p = 0.004." in text
+    assert "With 9 such questions the split would have to be at least 8 to 1 to fall below 0.05." in text
+
+
+def test_agreement_looks_only_at_questions_in_both_runs():
+    first = answers([("SELECT 1", True), ("SELECT 2", False)])
+    second = answers([("SELECT 1", True), ("SELECT two", False), ("SELECT 3", True)])
+    assert describe_agreement({"f16": first}, {"f16": second}) == (
+        "- f16: 2 questions are in both runs. 1 got the same answer text, 2 got the same outcome.\n"
+    )

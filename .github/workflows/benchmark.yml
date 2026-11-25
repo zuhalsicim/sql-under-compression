@@ -1,34 +1,44 @@
 name: benchmark
 
-# A push that changes code runs the smoke test: 5 questions, every precision on
-# its own machine, all at the same time.
-# The full run is started by hand in the Actions tab: 200 questions, all four
-# precisions one after the other on one machine.
+# A push that changes the code of this benchmark runs the smoke test:
+# 5 questions, every precision on its own machine, all at the same time.
+# A run is started by hand in the Actions tab. The defaults are the run for
+# size, memory and speed: 200 questions, all four precisions one after the
+# other on one machine. The run for accuracy asks all 1034 questions, with
+# one machine per precision and without the second pass.
 on:
   push:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - "results/**"
+    paths:
+      - "*.py"
+      - "sqlbench/**"
+      - "tests/**"
+      - "requirements*.txt"
+      - "pyproject.toml"
+      - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       questions:
-        description: "Number of questions (200 = full run, 5 = smoke test)"
+        description: "Number of questions (200, 1034 = all, 5 = smoke test)"
         default: "200"
       machines:
         description: "JSON list with one entry per machine: the precisions that run on it"
         default: '["f16 q8_0 q5_k_m q4_k_m"]'
+      second_pass:
+        description: "Score a second time with pruna's EvaluationAgent (yes or no)"
+        default: "yes"
 
 permissions:
   contents: read
 
-# A newer run stops an older run of the same kind on the same branch.
+# A newer push stops the older smoke test of the same branch.
+# A run started by hand gets a group of its own and is never stopped by another run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && 'push' || github.run_id }}
   cancel-in-progress: true
 
 env:
   QUESTIONS: ${{ inputs.questions || '5' }}
+  SECOND_PASS: ${{ inputs.second_pass || 'yes' }}
   # pruna sends anonymous usage data unless this is set.
   PRUNA_METRICS_ENABLED: "false"
 
@@ -87,7 +97,9 @@ jobs:
             # Step 3: evaluate.
             python evaluate.py model data/spider "$QUESTIONS" output/$precision.json
             # Step 4: evaluate again with pruna's tools.
-            python evaluate_with_pruna.py model data/spider output/$precision.json output/$precision.pruna.json
+            if [ "$SECOND_PASS" = "yes" ]; then
+              python evaluate_with_pruna.py model data/spider output/$precision.json output/$precision.pruna.json
+            fi
             rm -rf model
           done
       - uses: actions/upload-artifact@v7

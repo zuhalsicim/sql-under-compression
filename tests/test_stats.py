@@ -1,6 +1,6 @@
 import pytest
 
-from sqlbench.stats import sign_test, wilson_interval
+from sqlbench.stats import most_even_split_below, sign_test, wilson_interval
 
 
 def test_half_of_one_hundred():
@@ -73,3 +73,24 @@ def test_sign_test_gets_smaller_when_the_split_gets_more_uneven():
 def test_sign_test_refuses_negative_counts():
     with pytest.raises(ValueError):
         sign_test(lost=-1, gained=3)
+
+
+def test_most_even_split_below_for_the_q4_k_m_case():
+    # 14 questions differ: 12 to 2 is below 0.05, 11 to 3 is not.
+    assert most_even_split_below(14) == (12, 2)
+    assert sign_test(12, 2) < 0.05 <= sign_test(11, 3)
+
+
+def test_most_even_split_below_needs_at_least_six_questions():
+    # 5 to 0 gives 2/32 = 0.0625, so five questions can never be enough.
+    assert most_even_split_below(5) is None
+    assert most_even_split_below(0) is None
+    assert most_even_split_below(6) == (6, 0)
+
+
+def test_most_even_split_below_is_the_border():
+    for differing in (20, 50, 100):
+        larger, smaller = most_even_split_below(differing)
+        assert larger + smaller == differing
+        assert sign_test(larger, smaller) < 0.05
+        assert sign_test(larger - 1, smaller + 1) >= 0.05

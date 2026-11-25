@@ -41,3 +41,17 @@ def sign_test(lost: int, gained: int) -> float:
     one_side = sum(math.comb(tosses, heads) for heads in range(smaller + 1)) / 2**tosses
     # ... and the same again for the other side, because "lost" and "gained" could be swapped.
     return min(1.0, 2 * one_side)
+
+
+def most_even_split_below(differing: int, level: float = 0.05) -> tuple[int, int] | None:
+    """Return the most even split of `differing` questions that the sign test puts below `level`.
+
+    This says how clear a difference must be before the test can see it.
+    For 14 differing questions the answer is (12, 2): a split of 12 to 2 is
+    below 0.05, a split of 11 to 3 is not. With too few differing questions
+    no split is below the level, and the function returns None.
+    """
+    for smaller in range(differing // 2, -1, -1):
+        if sign_test(differing - smaller, smaller) < level:
+            return differing - smaller, smaller
+    return None
