@@ -1,0 +1,26 @@
+{
+  "setting": "stable_fast",
+  "smash_config": [
+    "stable_fast"
+  ],
+  "model_id": "nota-ai/bk-sdm-tiny",
+  "model_revision": "0364108e53b7f7f4d2585e817a0b7a83dc261cfa",
+  "image_settings": {
+    "height": 256,
+    "width": 256,
+    "steps": 8,
+    "guidance_scale": 7.5
+  },
+  "pruna_version": "0.3.5",
+  "torch_version": "2.15.0+cpu",
+  "diffusers_version": "0.43.0",
+  "runner": {
+    "name": "GitHub Actions 1000000073",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cpu_count": 2,
+    "memory_bytes": 8317022208,
+    "image": "ubuntu26 20261116.202.1"
+  },
+  "error": "ImportError: ('Could not import necessary packages for stable_fast. ', 'To use stable_fast, follow the installation instructions: ``pip install pruna[stable-fast]`` or ``pip install pruna[stable-fast] --extra-index-url https://prunaai.pythonanywhere.com/`` for other torch versions.')",
+  "peak_memory_bytes": 1624973312
+}

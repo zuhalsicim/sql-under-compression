@@ -1,0 +1,37 @@
+{
+  "setting": "torch_dynamic",
+  "smash_config": [
+    "torch_dynamic"
+  ],
+  "model_id": "nota-ai/bk-sdm-tiny",
+  "model_revision": "0364108e53b7f7f4d2585e817a0b7a83dc261cfa",
+  "image_settings": {
+    "height": 256,
+    "width": 256,
+    "steps": 8,
+    "guidance_scale": 7.5
+  },
+  "pruna_version": "0.3.5",
+  "torch_version": "2.15.0+cpu",
+  "diffusers_version": "0.43.0",
+  "runner": {
+    "name": "GitHub Actions 1000000073",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cpu_count": 2,
+    "memory_bytes": 8317022208,
+    "image": "ubuntu26 20261116.202.1"
+  },
+  "smash_seconds": 19.513454931999945,
+  "warm_up_seconds": 23.808531085000027,
+  "images": [
+    {
+      "prompt_number": 0,
+      "repeat": 0,
+      "seconds": 23.962533956000016,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    }
+  ],
+  "peak_memory_bytes": 5185015808,
+  "saved_size_bytes": 3340122808
+}

@@ -4,9 +4,11 @@ A run on GitHub takes its work from this file: RUN lists the settings it
 measures and PROMPT_COUNT says how many prompts it uses.
 """
 
-# The model: a Stable Diffusion v1.4 with a much smaller UNet (Kim et al., "BK-SDM").
-MODEL_ID = "nota-ai/bk-sdm-tiny"
-MODEL_REVISION = "0364108e53b7f7f4d2585e817a0b7a83dc261cfa"
+# The model: a Stable Diffusion v1.4 with a smaller UNet (Kim et al., "BK-SDM").
+# The first try used the still smaller "nota-ai/bk-sdm-tiny". Its UNet has no
+# middle block, and pruna's deepcache stops with an error on such a UNet.
+MODEL_ID = "nota-ai/bk-sdm-base"
+MODEL_REVISION = "0c03b7a0369b49f97d1acf7256d4ee55ced9b2e0"
 
 # The prompts: PartiPrompts by Google, 1632 prompts, Apache-2.0.
 PROMPTS_REPO = "nateraw/parti-prompts"
@@ -18,12 +20,12 @@ SEED = 42  # chooses the prompts; prompt number i is generated with seed SEED + 
 # How an image is made. Every setting uses the same values.
 HEIGHT = 256
 WIDTH = 256
-STEPS = 8
+STEPS = 15
 GUIDANCE_SCALE = 7.5
 
 # Timing: the first few prompts are generated again, to see how much the time varies.
-REPEATED_PROMPTS = 2
-EXTRA_REPEATS = 0
+REPEATED_PROMPTS = 3
+EXTRA_REPEATS = 1
 
 # All pruna settings that were tried. None means: the model as it is.
 # The value is what goes into pruna's SmashConfig.
@@ -52,6 +54,7 @@ CANDIDATES = {
     "sage_attn": ["sage_attn"],
 }
 
-# What the next run measures. This is the first try: every setting, one prompt.
-RUN = list(CANDIDATES)
-PROMPT_COUNT = 1
+# What the next run measures: the settings that ran on a CPU in the first try,
+# and deepcache again, now on a model whose UNet has a middle block.
+RUN = ["base", "deepcache_2", "deepcache_3", "torch_dynamic", "torch_compile_inductor"]
+PROMPT_COUNT = 16
