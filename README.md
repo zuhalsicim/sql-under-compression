@@ -10,6 +10,9 @@ This repository holds a benchmark that answers this with measured numbers. It al
 Model: Qwen2.5-Coder-1.5B-Instruct. Questions: the Spider development set.
 An answer is correct if its SQL, run on the SQLite database, returns the same result as the reference query.
 
+Every answer is generated greedily: temperature 0, the model always takes the most likely next token (the setting is written in every result file).
+The last column compares each precision with f16 on the same questions, one by one. Its `p` comes from an exact two-sided sign test on the questions whose outcome differs.
+
 | Precision | File size | Peak memory | Tokens per second | Seconds per question | Execution accuracy (95 % interval) | Change against f16 |
 |---|---|---|---|---|---|---|
 | f16 | 3.09 GB | 3.53 GB | 7.9 | 5.2 | 647/1034 = 62.6% (59.6% to 65.5%) | baseline |
@@ -24,8 +27,8 @@ The table comes from two runs. `python make_table.py results results-full-dev` p
 - **Execution accuracy and change against f16**: [run 45529640714](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45529640714), 25 November 2026, commit `1df0342`.
   All 1034 questions of the development set, each precision on its own machine. The result files are in `results-full-dev/`.
 
-The last column is paired: each precision is compared with f16 on the same 1034 questions, one by one.
-`p` is from an exact two-sided sign test on the questions where the two differ: the chance of a split between lost and gained at least this uneven, if both versions were equally good.
+More on the last column: the comparison uses the same 1034 questions for every precision. "Lost" are questions that f16 answered correctly and this precision did not, "gained" is the reverse.
+`p` is the chance of a split between lost and gained at least this uneven, if both versions were equally good.
 
 What the numbers say, and what they do not say:
 
@@ -33,7 +36,7 @@ What the numbers say, and what they do not say:
 - **8 bits and the 5-bit mix cost no accuracy that this run can see.** q8_0 answered 646 of 1034 questions correctly and q5_k_m 653, against 647 for f16. Lost and gained questions are close to balanced: 6 to 5, and 14 to 20.
 - **The 4-bit mix costs about 3 points.** q4_k_m answered 614 correctly. It lost 59 questions that f16 got right and gained 26. Fair coin tosses give a split this uneven less than once in a thousand tries (p < 0.001).
 - **What the run could have seen.** Each interval is about 6 points wide. The paired test is finer. With the number of answers that really changed, a net loss of 9 questions (0.9 points) for q8_0, of 14 questions (1.4 points) for q5_k_m and of 21 questions (2.0 points) for q4_k_m would have fallen below 0.05. A smaller loss can hide in this run. So "no loss that this run can see" does not mean "no loss".
-- **One doubt about the 3 points.** In the accuracy run q4_k_m and f16 ran on different machines, and q4_k_m did not repeat its own answers exactly: of the 200 questions that both runs asked, it gave 11 another answer text and 2 another outcome. The other three precisions repeated all 200 answers exactly. A net loss of 33 questions is far more than that, but it is noise in the comparison (see Limits).
+- **The answers of q4_k_m depend a little on which questions came before.** Of the 200 questions that both runs asked, q4_k_m gave 11 another answer text and 2 another outcome in the accuracy run. The other three precisions repeated all 200 answers exactly. Three more runs of q4_k_m alone looked for the cause (`results-q4-repeat/`). With the same questions in the same order, q4_k_m gave exactly the same answers again: 200 of 200 on two more machines, and 1034 of 1034. So the machine does not change the answers, and the model file, which is built anew in every run, does not either. The order of the questions does. The loss of 33 questions was measured with the same order for f16 and q4_k_m, and the repeat gave 614 of 1034 again. Why the order matters for q4_k_m was not measured (see Limits).
 - **Memory does not follow file size.** q4_k_m needed more memory than q5_k_m, because llama.cpp kept a second, re-arranged copy of about two thirds of the q4_k_m weights in RAM (see Limits).
 - **Speed was measured once, on one shared machine.** It is not a general statement about these files (see Limits).
 
@@ -125,7 +128,15 @@ A comparison across machines would mix this with the effect of compression.
 
 - **One small model, one dataset.** With 1034 questions each accuracy interval is about 6 points wide. The sign test sees a difference only if the differing questions split unevenly enough: at least 10 to 1 for the 11 differing questions of q8_0, at least 24 to 10 for the 34 of q5_k_m, at least 53 to 32 for the 85 of q4_k_m. So a loss of about 1 point for q8_0, or of 1.4 points for q5_k_m, could not have been seen. The observed split of q4_k_m was 59 to 26.
 - **The first run had only 200 questions and could not see the loss of q4_k_m.** There f16, q8_0, q5_k_m and q4_k_m answered 118, 119, 123 and 114 of 200 correctly, and no difference was below 0.05 (p = 1.000, 0.125 and 0.424). `python make_table.py results` prints that table.
-- **The accuracy run used four machines, and q4_k_m does not repeat itself exactly.** The 200 questions of the first run are part of the 1034. f16, q8_0 and q5_k_m gave all 200 the same answer text in both runs. q4_k_m gave 189 the same text and 198 the same outcome. The two runs differ in the machine and in the questions asked before each question. The machine alone does not explain it: q5_k_m and f16 also ran on another kind of CPU than in the first run and repeated every answer. This benchmark did not find the cause. The result files hold no checksum of the model file, so a difference in the q4_k_m file itself is not ruled out. For the table this means: a few of the 85 differing questions of q4_k_m may differ for this reason and not because of the precision.
+- **q4_k_m gives slightly different answers when the order of the questions changes.** The 200 questions of the first run are part of the 1034. f16, q8_0 and q5_k_m gave all 200 the same answer text in both runs. q4_k_m gave 189 the same text and 198 the same outcome. Three more runs with q4_k_m alone tested why (`results-q4-repeat/`, compared with `compare_runs.py`):
+  - 200 questions on an AMD EPYC 7763: 200 of 200 answers are the same as in the first run, which ran on an AMD EPYC 9V45.
+  - 200 questions on an AMD EPYC 9V74: 200 of 200 are the same.
+  - 1034 questions on an AMD EPYC 9V74: 1034 of 1034 answers are the same as in the accuracy run (another machine, also an EPYC 9V74). Against the 200-question runs it shows 189 and 198 of 200 again.
+
+  What this shows: with the same order the answers repeat exactly, on three kinds of CPU for the 200 questions. The 1034 questions were repeated only on the same kind of CPU. With another order 11 of 200 answers change, on the same kind of CPU.
+  What it does not show: whether the weights in the file are identical from run to run. The SHA-256 of the file was different in all three runs, although the size was the same. pruna converts from a temporary folder, and the file stores the random name of that folder as the model name (three different names in the logs). A checksum of the whole file can therefore never be the same twice. The answers were the same anyway.
+  A guess about the cause, not measured: llama.cpp keeps the last prompt in a cache, so the order of the questions decides how many tokens it reads in one batch, and the re-arranged copy of the q4_k_m weights (see the limit on memory below) may be computed with slightly different rounding for another batch size. The other three precisions have no such copy and repeated exactly.
+  For the table this means: the 3 points of q4_k_m are reproducible for this order of questions. With another order a few outcomes change (2 of 200 here), so the exact size of the loss is a little less certain than the interval says.
 - **Speed is one run on one shared machine.** Other users of the same hardware can slow it down. Within the run the speed was steady: the second pass over the same questions (through pruna) took 5.1, 3.2, 3.1 and 2.4 seconds per question for f16, q8_0, q5_k_m and q4_k_m, against 5.2, 3.3, 3.1 and 2.3 in the first pass. On another machine the numbers will be different, and the order of q8_0 and q5_k_m may be different too.
 - **Seconds per question depends on the order of the questions.** The questions are asked in the order of the dataset, database by database. llama.cpp keeps the last prompt in a cache, so it reads the schema once per database and not once per question. In the smoke test every one of the 5 questions is about another database. There f16 needed between 27.7 and 31.7 seconds per question.
 - **Peak memory counts the model file that is mapped into memory.** The system can drop such pages when RAM gets short and read them again later. After the last question the memory was split like this (`RssFile` and `RssAnon` in the result files):
@@ -135,6 +146,7 @@ A comparison across machines would mix this with the effect of compression.
   - q4_k_m: 1.00 GB model file mapped into memory, 1.03 GB allocated by the process
 - **The extra memory of q4_k_m comes from llama.cpp.** While loading the q4_k_m file, llama.cpp reported `CPU_REPACK model buffer size = 596.53 MiB` next to `CPU_Mapped model buffer size = 927.31 MiB` (`results/q4_k_m.llama_load.txt`). For the other three files it reported only the mapped buffer. This run did not test whether the re-arranged copy is also the reason for the higher speed of q4_k_m.
 - **The f16 file is the baseline, not the original model.** See Compression above.
+- **The model has very probably seen these questions before.** Spider is a public dataset from 2018, and its development set was very probably part of the model's training data. This benchmark did not check that. It can raise all four accuracies, so the absolute figures are not a measure of text-to-SQL skill. The point of the run is the comparison between precisions of the same model.
 - **Execution accuracy is not a perfect judge.** A wrong query can return the right rows by chance. A right query with another column order counts as wrong. The reference queries of Spider are used as they are.
 - **The prompt shows the schema only.** The model does not see any stored values.
 
@@ -155,7 +167,7 @@ Model: [`nota-ai/bk-sdm-base`](https://huggingface.co/nota-ai/bk-sdm-base), a St
 All numbers come from one run on one machine: [Actions run 45552987716](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45552987716), commit `a77364d`, AMD EPYC 9V45, 2 virtual CPUs, 8.3 GB RAM.
 The files are in `results-image/without-safety-checker/`. `python -m imagebench.make_table results-image/without-safety-checker base deepcache_2 deepcache_3` prints the table.
 
-- **pruna's cacher halves the time per image on a CPU.** `deepcache` reuses part of the UNet's work from the step before: every second step (`deepcache_2`) or two of three steps (`deepcache_3`). Memory and the size of the saved model do not change.
+- **The speed-up is no finding on its own, its price is.** `deepcache` reuses part of the UNet's work from the step before: every second step (`deepcache_2`) or two of three steps (`deepcache_3`). That roughly halves the work by construction, and the time per image roughly halves with it, also on a CPU. The finding is what it costs: the images change clearly, while the CLIP score does not fall on 12 prompts. Memory and the size of the saved model do not change.
 - **The images change clearly.** SSIM and LPIPS compare each image with the base model's image for the same prompt and seed. An SSIM near 0.4 means another picture, not a slightly noisier copy. "Changed" is not "worse".
 - **The CLIP score does not fall.** It says how well image and prompt fit. With 12 prompts it cannot show a small loss.
 - **Most of pruna's other algorithms refuse a CPU or do not fit this model.** `quanto` and `diffusers_int8` refuse a CPU. `stable_fast`, `x_fast` and `hqq_diffusers` stopped on missing packages. `torch_compile` with the openvino backend failed inside PyTorch. `half`, `fora`, `sage_attn` and `hyper` do not fit this model. `torch_dynamic` and `torch_compile` with the inductor backend ran and brought no gain: 4 % faster with other images and more memory, and 10 % slower. The error texts are in `results-image-first-try/`, the two measurements in `results-image/machines-2-and-3-from-the-job-logs.txt`.
@@ -207,17 +219,20 @@ pytest imagebench/tests
 | `sqlbench/sqlclean.py` | Cuts the answer of the model down to one SQL statement. |
 | `sqlbench/sqlexec.py` | Runs SQL and decides whether two results are the same. |
 | `sqlbench/stats.py` | The Wilson interval and the sign test. |
+| `sqlbench/checksum.py` | The SHA-256 of a model file. |
 | `sqlbench/report.py` | Builds the results table from the result files. |
 | `fetch_spider.py` | Step 1: downloads Spider. |
 | `compress.py` | Step 2: compresses the model with pruna. |
 | `evaluate.py` | Step 3: asks the questions and measures. |
 | `evaluate_with_pruna.py` | Step 4: scores a second time with pruna's EvaluationAgent. |
 | `make_table.py` | Step 5: prints the table. |
+| `compare_runs.py` | Compares two runs: same answers, same model file? |
 | `tests/` | Unit tests for the code in `sqlbench/`. |
 | `requirements.txt`, `requirements-dev.txt` | The packages for the GitHub machine, and for the unit tests. |
 | `.github/workflows/benchmark.yml` | Runs the unit tests and the five steps on GitHub. |
 | `results/` | The result files of the 200-question run (size, memory, speed), and the package versions it used. |
 | `results-full-dev/` | The result files of the accuracy run with all 1034 questions. |
+| `results-q4-repeat/` | Three more runs of q4_k_m alone, made to find out why it did not repeat its answers. |
 | `imagebench/` | The image experiment: `settings.py` (every fixed choice), `measure.py` (prompts, spread, table), `generate.py` (images, time, memory), `score.py` (quality with pruna's EvaluationAgent), `make_table.py`, `tests/`. |
 | `.github/workflows/image.yml` | Runs the image experiment on GitHub, started by hand. |
 | `results-image/` | The result files of the image experiment. |

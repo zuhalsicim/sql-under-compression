@@ -1,0 +1,2 @@
+load_tensors:   CPU_Mapped model buffer size =   927.31 MiB
+load_tensors:   CPU_REPACK model buffer size =   596.53 MiB
