@@ -141,10 +141,13 @@ On a Linux machine with Python 3.12:
 pip install -r requirements.txt
 python fetch_spider.py data
 python compress.py q4_k_m model
-python evaluate.py model data/spider 200 results/q4_k_m.json
-python evaluate_with_pruna.py model data/spider results/q4_k_m.json results/q4_k_m.pruna.json
-python make_table.py results
+python evaluate.py model data/spider 200 output/q4_k_m.json
+python evaluate_with_pruna.py model data/spider output/q4_k_m.json output/q4_k_m.pruna.json
+python make_table.py output
 ```
+
+A new run writes to `output/`. The folder `results/` holds the published full run and stays as it is.
+`python make_table.py results` prints the table above again.
 
 These steps were only ever run on the GitHub machines described above.
 

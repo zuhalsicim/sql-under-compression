@@ -1,6 +1,7 @@
 """Step 5: read the result files of one run and print the results table.
 
-Usage: python make_table.py results
+Usage: python make_table.py output     (the files of a new run)
+       python make_table.py results    (the files of the published full run)
 """
 
 import json

@@ -1,6 +1,6 @@
 """Step 3: ask the model the questions, check its SQL, and measure memory and speed.
 
-Usage: python evaluate.py model data/spider 200 results/q4_k_m.json
+Usage: python evaluate.py model data/spider 200 output/q4_k_m.json
 
 This script loads the GGUF file with llama-cpp-python only. It does not import
 pruna or PyTorch, so the measured memory is the memory of the model and not

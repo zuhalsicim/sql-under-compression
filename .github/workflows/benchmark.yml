@@ -68,8 +68,10 @@ jobs:
       - name: Install pruna and llama-cpp-python
         run: |
           pip install -r requirements.txt
-          mkdir results
-          pip freeze > results/pip-freeze-machine-${{ strategy.job-index }}.txt
+          # A run writes its files to output/. The folder results/ in the
+          # repository holds the published full run and is never touched.
+          mkdir output
+          pip freeze > output/pip-freeze-machine-${{ strategy.job-index }}.txt
       - name: "Step 1: download Spider"
         run: python fetch_spider.py data
       - name: "Steps 2 to 4 for every precision of this machine"
@@ -81,18 +83,18 @@ jobs:
             # Step 2: compress the model with pruna.
             python compress.py $precision model 2>&1 | tee compress.log
             # Keep what llama.cpp says about the memory of the weights.
-            grep "model buffer size" compress.log > results/$precision.llama_load.txt || true
+            grep "model buffer size" compress.log > output/$precision.llama_load.txt || true
             # Step 3: evaluate.
-            python evaluate.py model data/spider "$QUESTIONS" results/$precision.json
+            python evaluate.py model data/spider "$QUESTIONS" output/$precision.json
             # Step 4: evaluate again with pruna's tools.
-            python evaluate_with_pruna.py model data/spider results/$precision.json results/$precision.pruna.json
+            python evaluate_with_pruna.py model data/spider output/$precision.json output/$precision.pruna.json
             rm -rf model
           done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: results-machine-${{ strategy.job-index }}
-          path: results/
+          path: output/
 
   table:
     needs: benchmark
@@ -106,15 +108,15 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: results-machine-*
-          path: results
+          path: output
           merge-multiple: true
       - name: "Step 5: make the table"
         run: |
           echo "Questions per precision: $QUESTIONS" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          python make_table.py results >> "$GITHUB_STEP_SUMMARY"
+          python make_table.py output >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: results
-          path: results/
+          path: output/

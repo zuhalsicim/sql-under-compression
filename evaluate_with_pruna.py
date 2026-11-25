@@ -1,6 +1,6 @@
 """Step 4: compute the accuracy a second time, now with pruna's own evaluation tools.
 
-Usage: python evaluate_with_pruna.py model data/spider results/q4_k_m.json results/q4_k_m.pruna.json
+Usage: python evaluate_with_pruna.py model data/spider output/q4_k_m.json output/q4_k_m.pruna.json
 
 evaluate.py already measured everything. This script asks the same questions
 again through pruna's EvaluationAgent with a custom metric, and compares the
