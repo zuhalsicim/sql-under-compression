@@ -1,7 +1,7 @@
 """Every fixed choice of the image benchmark, in one place.
 
-A run on GitHub takes its work from this file: RUN lists the settings it
-measures and PROMPT_COUNT says how many prompts it uses.
+The workflow says which settings run together on one machine.
+PROMPT_COUNT says how many prompts every setting gets.
 """
 
 # The model: a Stable Diffusion v1.4 with a smaller UNet (Kim et al., "BK-SDM").
@@ -54,7 +54,4 @@ CANDIDATES = {
     "sage_attn": ["sage_attn"],
 }
 
-# What the next run measures: the settings that ran on a CPU in the first try,
-# and deepcache again, now on a model whose UNet has a middle block.
-RUN = ["base", "deepcache_2", "deepcache_3", "torch_dynamic", "torch_compile_inductor"]
-PROMPT_COUNT = 16
+PROMPT_COUNT = 12

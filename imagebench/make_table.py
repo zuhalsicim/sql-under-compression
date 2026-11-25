@@ -1,6 +1,6 @@
 """Print the table of the image benchmark from the files of one run.
 
-Usage: python -m imagebench.make_table output-image
+Usage: python -m imagebench.make_table output-image base deepcache_2 deepcache_3
 """
 
 import json
@@ -8,13 +8,12 @@ import sys
 from pathlib import Path
 
 from imagebench.measure import make_table
-from imagebench.settings import RUN
 
 
 def main() -> None:
-    out_dir = Path(sys.argv[1])
+    out_dir, names = Path(sys.argv[1]), sys.argv[2:]
     results = {}
-    for name in RUN:
+    for name in names:
         path = out_dir / f"{name}.json"
         if path.exists():
             results[name] = json.loads(path.read_text(encoding="utf-8"))

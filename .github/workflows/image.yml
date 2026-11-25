@@ -1,7 +1,8 @@
 name: image
 
 # The image benchmark: one small text-to-image model, compressed with pruna, on a CPU.
-# What a run measures is written in imagebench/settings.py (RUN and PROMPT_COUNT).
+# Every entry of the matrix is one machine and the settings it measures.
+# Speed is compared only inside a machine, against the base model on that machine.
 #
 # GitHub can start a workflow by hand only if its file is on the default branch.
 # While this work lives on the branch "image-model", a push to that branch that
@@ -36,7 +37,16 @@ jobs:
   measure:
     needs: tests
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - "base deepcache_2 deepcache_3"
+          - "base torch_dynamic"
+          - "base torch_compile_inductor"
+    env:
+      SETTINGS: ${{ matrix.settings }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -54,22 +64,23 @@ jobs:
           pip freeze > output-image/pip-freeze.txt
       - name: Generate and measure, one setting after the other on this machine
         run: |
-          for setting in $(python -c "from imagebench.settings import RUN; print(' '.join(RUN))"); do
-            # Every setting gets its own process and at most 25 minutes.
-            timeout 1500 python -m imagebench.generate $setting output-image || true
+          for setting in $SETTINGS; do
+            # Every setting gets its own process and at most 40 minutes.
+            timeout --signal=KILL 2400 python -m imagebench.generate $setting output-image || true
             if [ ! -f output-image/$setting.json ]; then
-              echo "{\"setting\": \"$setting\", \"error\": \"no result: the process crashed or was stopped after 25 minutes\"}" > output-image/$setting.json
+              echo "{\"setting\": \"$setting\", \"error\": \"no result: the process crashed or was stopped after 40 minutes\"}" > output-image/$setting.json
             fi
+            free -h
           done
       - name: Score the images with pruna's EvaluationAgent
-        run: python -m imagebench.score output-image
+        run: python -m imagebench.score output-image $SETTINGS
       - name: Make the table
         if: always()
         run: |
-          python -m imagebench.make_table output-image >> "$GITHUB_STEP_SUMMARY"
+          python -m imagebench.make_table output-image $SETTINGS >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: image-results
+          name: image-results-${{ strategy.job-index }}
           path: output-image/

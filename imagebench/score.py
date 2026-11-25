@@ -1,6 +1,6 @@
 """Score the stored images with pruna's EvaluationAgent and its built-in image metrics.
 
-Usage: python -m imagebench.score output-image
+Usage: python -m imagebench.score output-image base deepcache_2 deepcache_3
 
 generate.py made the images. Here a small stand-in "model" hands them to
 pruna's EvaluationAgent, so the agent scores them without generating again.
@@ -24,7 +24,7 @@ from pruna.evaluation.metrics import TorchMetricWrapper
 from torchvision.transforms.functional import pil_to_tensor
 
 from imagebench.measure import read_prompts
-from imagebench.settings import PROMPT_COUNT, PROMPTS_FILE, PROMPTS_REPO, PROMPTS_REVISION, RUN, SEED
+from imagebench.settings import PROMPT_COUNT, PROMPTS_FILE, PROMPTS_REPO, PROMPTS_REVISION, SEED
 
 
 class StoredImages:
@@ -41,7 +41,7 @@ class StoredImages:
 
 
 def main() -> None:
-    out_dir = Path(sys.argv[1])
+    out_dir, names = Path(sys.argv[1]), sys.argv[2:]
     prompts_file = hf_hub_download(PROMPTS_REPO, PROMPTS_FILE, repo_type="dataset", revision=PROMPTS_REVISION)
     prompts = read_prompts(prompts_file, PROMPT_COUNT, SEED)
 
@@ -57,14 +57,17 @@ def main() -> None:
     ]
     agent = EvaluationAgent(request=metrics, datamodule=datamodule, device="cpu")
 
-    # Only settings that produced all images can be scored. The base model must come first.
+    # Only settings that produced all images can be scored. The base model must come first,
+    # because pruna compares every later setting with the first one.
     finished = [
         name
-        for name in RUN
+        for name in names
         if "error" not in json.loads((out_dir / f"{name}.json").read_text(encoding="utf-8"))
     ]
-    finished.sort(key=lambda name: name != "base")
     scores = {}
+    if not finished or finished[0] != "base":
+        print("The base model has no images, so nothing can be scored.")
+        finished = []
     for name in finished:
         results = agent.evaluate(StoredImages(out_dir / name))
         scores[name] = {result.name: result.result for result in results}
