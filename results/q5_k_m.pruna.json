@@ -1,0 +1,24 @@
+{
+  "pruna_version": "0.3.5",
+  "questions": 200,
+  "execution_accuracy_with_pruna": {
+    "works": true,
+    "value": 0.615
+  },
+  "execution_accuracy_with_evaluate_py": 0.615,
+  "questions_scored_by_pruna": 200,
+  "questions_with_a_different_outcome": 0,
+  "seconds_for_all_questions_with_pruna": 617.1376927380006,
+  "seconds_for_all_questions_with_evaluate_py": 621.602148664987,
+  "inference_memory_with_pruna": {
+    "works": false,
+    "error": "ValueError: Memory metrics does not support device cpu. Must be one of ['cuda']."
+  },
+  "latency_ms_with_pruna": {
+    "works": true,
+    "value": 2270.5027817999508
+  },
+  "latency_ms_with_evaluate_py": 3052.6517231999605,
+  "latency_questions": 5,
+  "memory_after_importing_pruna_bytes": 795828224
+}
