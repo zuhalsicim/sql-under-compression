@@ -1,7 +1,7 @@
 """Turn the result files of one run into a Markdown table."""
 
 from sqlbench.settings import BASELINE, PRECISIONS
-from sqlbench.stats import wilson_interval
+from sqlbench.stats import sign_test, wilson_interval
 
 HEADER = (
     "| Precision | File size | Peak memory | Tokens per second | Seconds per question "
@@ -34,7 +34,10 @@ def _row(precision: str, result: dict | None, baseline: dict | None) -> str:
 
 
 def _change(precision: str, result: dict, baseline: dict | None) -> str:
-    """Describe the accuracy of one precision against the baseline, question by question."""
+    """Describe the accuracy of one precision against the baseline, question by question.
+
+    The p-value comes from the sign test on the lost and gained questions.
+    """
     if precision == BASELINE:
         return "baseline"
     if baseline is None:
@@ -46,7 +49,7 @@ def _change(precision: str, result: dict, baseline: dict | None) -> str:
     lost = sum(1 for index in before if before[index] and not after[index])
     gained = sum(1 for index in before if after[index] and not before[index])
     points = 100 * (gained - lost) / len(before)
-    return f"{points:+.1f} points (lost {lost}, gained {gained})"
+    return f"{points:+.1f} points (lost {lost}, gained {gained}, p = {sign_test(lost, gained):.3f})"
 
 
 def describe_runners(results: dict[str, dict]) -> str:

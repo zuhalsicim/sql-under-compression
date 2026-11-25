@@ -11,19 +11,23 @@ An answer is correct if its SQL, run on the SQLite database, returns the same re
 | Precision | File size | Peak memory | Tokens per second | Seconds per question | Execution accuracy (95 % interval) | Change against f16 |
 |---|---|---|---|---|---|---|
 | f16 | 3.09 GB | 3.53 GB | 7.9 | 5.2 | 118/200 = 59.0% (52.1% to 65.6%) | baseline |
-| q8_0 | 1.65 GB | 2.08 GB | 12.6 | 3.3 | 119/200 = 59.5% (52.6% to 66.1%) | +0.5 points (lost 1, gained 2) |
-| q5_k_m | 1.13 GB | 1.56 GB | 12.1 | 3.1 | 123/200 = 61.5% (54.6% to 68.0%) | +2.5 points (lost 1, gained 6) |
-| q4_k_m | 0.99 GB | 2.03 GB | 20.4 | 2.3 | 114/200 = 57.0% (50.1% to 63.7%) | -2.0 points (lost 9, gained 5) |
+| q8_0 | 1.65 GB | 2.08 GB | 12.6 | 3.3 | 119/200 = 59.5% (52.6% to 66.1%) | +0.5 points (lost 1, gained 2, p = 1.000) |
+| q5_k_m | 1.13 GB | 1.56 GB | 12.1 | 3.1 | 123/200 = 61.5% (54.6% to 68.0%) | +2.5 points (lost 1, gained 6, p = 0.125) |
+| q4_k_m | 0.99 GB | 2.03 GB | 20.4 | 2.3 | 114/200 = 57.0% (50.1% to 63.7%) | -2.0 points (lost 9, gained 5, p = 0.424) |
 
 All numbers come from one run: [Actions run 45508785082](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45508785082), 24 to 25 November 2026, commit `f6682bf`.
 The four precisions ran one after the other on one GitHub-hosted machine: AMD EPYC 9V45, 2 virtual CPUs, 8.3 GB RAM, no GPU, image `ubuntu26 20261116.202.1`.
 The result files are in `results/`.
 
+The last column is paired: each precision is compared with f16 on the same 200 questions, one by one.
+`p` is from an exact two-sided sign test on the questions where the two differ: the chance of a split between lost and gained at least this uneven, if both versions were equally good.
+The p-values were computed afterwards from the same result files.
+
 What the numbers say, and what they do not say:
 
 - The q4_k_m file is a third of the f16 file. On this machine the compressed versions generated 1.5 to 2.6 times as many tokens per second as f16.
 - Accuracy stayed between 57 % and 61.5 %. With 200 questions each interval is about 13.5 points wide. So the run shows no loss from compression, and it cannot rule out a loss of a few points.
-- The numbers do not say that q5_k_m is better than f16 or that q4_k_m is worse. Compression changed answers in both directions: q4_k_m lost 9 questions and gained 5. With 200 questions, differences of this size can come from chance.
+- The numbers do not say that q5_k_m is better than f16 or that q4_k_m is worse. Compression changed answers in both directions: q4_k_m lost 9 questions and gained 5. In the paired test no difference is below the usual line of 0.05 (p = 1.000, 0.125 and 0.424), so each of them can come from chance. That is not proof that the versions are equally good.
 - Memory does not follow file size. q4_k_m needed more memory than q5_k_m, because llama.cpp kept a second, re-arranged copy of about two thirds of the q4_k_m weights in RAM (see Limits).
 - Speed was measured once, on one shared machine. It is not a general statement about these files (see Limits).
 
@@ -85,7 +89,7 @@ Compressed with pruna. Measured by `evaluate.py`, a script in this repository th
 - **Tokens per second**: generated tokens divided by the time llama.cpp spent generating them, from llama.cpp's own counters. Reading the prompt is not included.
 - **Seconds per question**: the time of one call, from sending the prompt to the end of the answer, averaged over the questions. See Limits.
 - **Execution accuracy**: correct answers divided by questions, with the Wilson 95 % interval.
-- **Change against f16**: the same questions are compared one by one. "Lost" are questions that f16 answered correctly and this precision did not. "Gained" is the reverse.
+- **Change against f16**: the same questions are compared one by one. "Lost" are questions that f16 answered correctly and this precision did not. "Gained" is the reverse. `p` is the exact two-sided sign test on these two counts (`sign_test` in `sqlbench/stats.py`). Questions that both versions got right, or both got wrong, do not enter the test. If both versions were equally good, a question where they differ would be lost or gained with the same chance, like a coin toss. `p` is the chance that coin tosses split at least as unevenly as the two counts. For right-or-wrong answers this is the same as the exact McNemar test.
 
 pruna has its own evaluation tools. `evaluate_with_pruna.py` tried them on the same model files in the same run:
 
@@ -112,7 +116,7 @@ A comparison across machines would mix this with the effect of compression.
 
 ## Limits
 
-- **One small model, one dataset, 200 questions.** Each accuracy interval is about 13.5 points wide. A real difference of a few points between two precisions cannot be seen with this sample.
+- **One small model, one dataset, 200 questions.** Each accuracy interval is about 13.5 points wide. A real difference of a few points between two precisions cannot be seen with this sample. The sign test is weak for the same reason: few questions differ. With the 14 differing questions of q4_k_m, the split would have to be 12 to 2 or more uneven to fall below 0.05.
 - **Speed is one run on one shared machine.** Other users of the same hardware can slow it down. Within the run the speed was steady: the second pass over the same questions (through pruna) took 5.1, 3.2, 3.1 and 2.4 seconds per question for f16, q8_0, q5_k_m and q4_k_m, against 5.2, 3.3, 3.1 and 2.3 in the first pass. On another machine the numbers will be different, and the order of q8_0 and q5_k_m may be different too.
 - **Seconds per question depends on the order of the questions.** The questions are asked in the order of the dataset, database by database. llama.cpp keeps the last prompt in a cache, so it reads the schema once per database and not once per question. In the smoke test every one of the 5 questions is about another database. There f16 needed between 27.7 and 31.7 seconds per question.
 - **Peak memory counts the model file that is mapped into memory.** The system can drop such pages when RAM gets short and read them again later. After the last question the memory was split like this (`RssFile` and `RssAnon` in the result files):
@@ -160,7 +164,7 @@ pytest
 | `sqlbench/prompt.py` | Reads the schema of a database and builds the prompt. |
 | `sqlbench/sqlclean.py` | Cuts the answer of the model down to one SQL statement. |
 | `sqlbench/sqlexec.py` | Runs SQL and decides whether two results are the same. |
-| `sqlbench/stats.py` | The Wilson interval. |
+| `sqlbench/stats.py` | The Wilson interval and the sign test. |
 | `sqlbench/report.py` | Builds the results table from the result files. |
 | `fetch_spider.py` | Step 1: downloads Spider. |
 | `compress.py` | Step 2: compresses the model with pruna. |

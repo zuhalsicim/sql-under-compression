@@ -41,7 +41,16 @@ def test_change_counts_lost_and_gained_questions():
         "q4_k_m": result([True, False, False, True]),
     }
     row = make_table(results).splitlines()[-1]
-    assert row.endswith("| -25.0 points (lost 2, gained 1) |")
+    assert row.endswith("| -25.0 points (lost 2, gained 1, p = 1.000) |")
+
+
+def test_change_shows_a_small_p_value_for_a_one_sided_split():
+    results = {
+        "f16": result([True] * 8),
+        "q4_k_m": result([False] * 8),
+    }
+    row = make_table(results).splitlines()[-1]
+    assert row.endswith("| -100.0 points (lost 8, gained 0, p = 0.008) |")
 
 
 def test_missing_precision_is_shown_as_missing():

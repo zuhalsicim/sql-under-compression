@@ -1,6 +1,6 @@
 import pytest
 
-from sqlbench.stats import wilson_interval
+from sqlbench.stats import sign_test, wilson_interval
 
 
 def test_half_of_one_hundred():
@@ -35,3 +35,41 @@ def test_impossible_counts_fail():
         wilson_interval(1, 0)
     with pytest.raises(ValueError):
         wilson_interval(11, 10)
+
+
+def test_sign_test_on_the_three_comparisons_of_the_full_run():
+    # Lost and gained questions against f16 in results/: q8_0, q5_k_m, q4_k_m.
+    assert sign_test(lost=1, gained=2) == 1.0
+    assert sign_test(lost=1, gained=6) == 0.125
+    assert sign_test(lost=9, gained=5) == pytest.approx(0.424, abs=0.0005)
+
+
+def test_sign_test_by_hand():
+    # 5 questions differ, all in one direction. Fair coins do that with
+    # chance 1/32. Both directions together: 2/32.
+    assert sign_test(lost=5, gained=0) == 2 / 32
+    # 1 lost, 6 gained: 0 or 1 heads in 7 tosses has chance (1 + 7) / 128, times 2.
+    assert sign_test(lost=1, gained=6) == 2 * (1 + 7) / 128
+
+
+def test_sign_test_without_any_difference():
+    assert sign_test(lost=0, gained=0) == 1.0
+
+
+def test_sign_test_with_an_even_split_is_never_above_one():
+    assert sign_test(lost=3, gained=3) == 1.0
+    assert sign_test(lost=1, gained=1) == 1.0
+
+
+def test_sign_test_does_not_care_about_the_direction():
+    assert sign_test(lost=9, gained=5) == sign_test(lost=5, gained=9)
+
+
+def test_sign_test_gets_smaller_when_the_split_gets_more_uneven():
+    assert sign_test(lost=10, gained=0) < sign_test(lost=9, gained=1) < sign_test(lost=8, gained=2)
+    assert sign_test(lost=10, gained=0) == 2 / 1024
+
+
+def test_sign_test_refuses_negative_counts():
+    with pytest.raises(ValueError):
+        sign_test(lost=-1, gained=3)
