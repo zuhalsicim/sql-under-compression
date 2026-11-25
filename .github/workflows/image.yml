@@ -41,10 +41,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Run 45548775186 also had the machines "base torch_dynamic" and
+        # "base torch_compile_inductor". They are left out here to save minutes.
         settings:
           - "base deepcache_2 deepcache_3"
-          - "base torch_dynamic"
-          - "base torch_compile_inductor"
     env:
       SETTINGS: ${{ matrix.settings }}
     steps:

@@ -71,7 +71,11 @@ def measure(name: str, out_dir: Path, result: dict) -> None:
     prompts_file = hf_hub_download(PROMPTS_REPO, PROMPTS_FILE, repo_type="dataset", revision=PROMPTS_REVISION)
     prompts = read_prompts(prompts_file, PROMPT_COUNT, SEED)
 
-    pipe = StableDiffusionPipeline.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+    # The pipeline is loaded without its safety checker. With the checker on, 5 of the
+    # 12 images of the base model were replaced by black images at this small size
+    # (run 45548775186), and black images cannot be scored. The prompts are harmless,
+    # and the images are only scored and kept as a private artifact of the run.
+    pipe = StableDiffusionPipeline.from_pretrained(MODEL_ID, revision=MODEL_REVISION, safety_checker=None)
     if CANDIDATES[name] is not None:
         start = time.perf_counter()
         pipe = smash(model=pipe, smash_config=SmashConfig(CANDIDATES[name], device="cpu"))
@@ -122,13 +126,14 @@ def measure(name: str, out_dir: Path, result: dict) -> None:
     result["peak_memory_bytes"] = peak_memory_bytes()
 
     # After the memory is read: how large is the model when it is saved?
+    saved = out_dir / f"{name}-saved"
     try:
-        saved = out_dir / f"{name}-saved"
         pipe.save_pretrained(str(saved))
         result["saved_size_bytes"] = folder_size(saved)
-        shutil.rmtree(saved)
     except Exception as error:
         result["saved_size_error"] = f"{type(error).__name__}: {error}"[:300]
+    finally:
+        shutil.rmtree(saved, ignore_errors=True)  # the saved model must never end up in the artifact
 
 
 def main() -> None:
@@ -140,6 +145,7 @@ def main() -> None:
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
         "image_settings": {"height": HEIGHT, "width": WIDTH, "steps": STEPS, "guidance_scale": GUIDANCE_SCALE},
+        "safety_checker": "off",
         "pruna_version": pruna.__version__,
         "torch_version": torch.__version__,
         "diffusers_version": diffusers.__version__,
