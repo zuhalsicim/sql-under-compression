@@ -1,0 +1,75 @@
+name: image
+
+# The image benchmark: one small text-to-image model, compressed with pruna, on a CPU.
+# What a run measures is written in imagebench/settings.py (RUN and PROMPT_COUNT).
+#
+# GitHub can start a workflow by hand only if its file is on the default branch.
+# While this work lives on the branch "image-model", a push to that branch that
+# changes the image code starts the run instead.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - image-model
+    paths:
+      - "imagebench/**"
+      - ".github/workflows/image.yml"
+
+permissions:
+  contents: read
+
+env:
+  # pruna sends anonymous usage data unless this is set.
+  PRUNA_METRICS_ENABLED: "false"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest imagebench/tests
+
+  measure:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Show the machine
+        run: |
+          lscpu | grep -E "Model name|^CPU\(s\)|Thread|Core"
+          free -h
+          df -h /
+      - name: Install pruna
+        run: |
+          pip install -r imagebench/requirements.txt
+          mkdir output-image
+          pip freeze > output-image/pip-freeze.txt
+      - name: Generate and measure, one setting after the other on this machine
+        run: |
+          for setting in $(python -c "from imagebench.settings import RUN; print(' '.join(RUN))"); do
+            # Every setting gets its own process and at most 25 minutes.
+            timeout 1500 python -m imagebench.generate $setting output-image || true
+            if [ ! -f output-image/$setting.json ]; then
+              echo "{\"setting\": \"$setting\", \"error\": \"no result: the process crashed or was stopped after 25 minutes\"}" > output-image/$setting.json
+            fi
+          done
+      - name: Score the images with pruna's EvaluationAgent
+        run: python -m imagebench.score output-image
+      - name: Make the table
+        if: always()
+        run: |
+          python -m imagebench.make_table output-image >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: image-results
+          path: output-image/
