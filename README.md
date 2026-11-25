@@ -111,7 +111,8 @@ That is why file size, memory and speed come from `evaluate.py` and not from pru
 
 ### Where it runs
 
-GitHub Actions, `ubuntu-latest`, no GPU. This repository is private, so GitHub gives each job 2 virtual CPUs and 8 GB RAM.
+GitHub Actions, `ubuntu-latest`, no GPU. Every run in this README was made while the repository was private. GitHub then gives each job 2 virtual CPUs and 8 GB RAM.
+The repository is public now, and GitHub gives public repositories larger machines: 4 virtual CPUs and 16 GB RAM when this was written. `evaluate.py` uses as many threads as the machine has CPUs, so a new run will show other speeds. Whether the answers stay the same with more threads was not tested.
 
 - A push that changes code starts the smoke test: 5 questions, each precision on its own machine.
 - The run for size, memory and speed is started by hand: 200 questions, all four precisions one after the other on one machine, with the second pass through pruna.
