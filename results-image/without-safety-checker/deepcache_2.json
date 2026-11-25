@@ -1,0 +1,138 @@
+{
+  "setting": "deepcache_2",
+  "smash_config": {
+    "deepcache": {
+      "interval": 2
+    }
+  },
+  "model_id": "nota-ai/bk-sdm-base",
+  "model_revision": "0c03b7a0369b49f97d1acf7256d4ee55ced9b2e0",
+  "image_settings": {
+    "height": 256,
+    "width": 256,
+    "steps": 15,
+    "guidance_scale": 7.5
+  },
+  "safety_checker": "off",
+  "pruna_version": "0.3.5",
+  "torch_version": "2.15.0+cpu",
+  "diffusers_version": "0.43.0",
+  "runner": {
+    "name": "GitHub Actions 1000000089",
+    "cpu_model": "AMD EPYC 9V45 96-Core Processor",
+    "cpu_count": 2,
+    "memory_bytes": 8317018112,
+    "image": "ubuntu26 20261116.202.1"
+  },
+  "smash_seconds": 0.015118999000037547,
+  "warm_up_seconds": 21.414184587000022,
+  "images": [
+    {
+      "prompt_number": 0,
+      "repeat": 0,
+      "seconds": 21.338670804000003,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 1,
+      "repeat": 0,
+      "seconds": 21.166718592000052,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 2,
+      "repeat": 0,
+      "seconds": 22.006235623000066,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 3,
+      "repeat": 0,
+      "seconds": 21.625530492000053,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 4,
+      "repeat": 0,
+      "seconds": 21.527574851000054,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 5,
+      "repeat": 0,
+      "seconds": 20.941108105000012,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 6,
+      "repeat": 0,
+      "seconds": 20.45554605399991,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 7,
+      "repeat": 0,
+      "seconds": 20.853056199000093,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 8,
+      "repeat": 0,
+      "seconds": 21.190389216000085,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 9,
+      "repeat": 0,
+      "seconds": 20.98941611800001,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 10,
+      "repeat": 0,
+      "seconds": 20.809591100999796,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 11,
+      "repeat": 0,
+      "seconds": 21.17661367100004,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 0,
+      "repeat": 1,
+      "seconds": 20.430856607000123,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 1,
+      "repeat": 1,
+      "seconds": 20.543338231999996,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    },
+    {
+      "prompt_number": 2,
+      "repeat": 1,
+      "seconds": 20.796309229999906,
+      "blocked_by_safety_checker": false,
+      "same_as_first": true
+    }
+  ],
+  "peak_memory_bytes": 4213022720,
+  "saved_size_bytes": 3148151046
+}

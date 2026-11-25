@@ -1,0 +1,20 @@
+Run 45548775186, safety checker on. The artifacts of these two machines contain a saved model
+by mistake (about 2 GB each) and were not downloaded. These lines are copied from the job logs.
+
+Machine 2: runner "GitHub Actions 1000000087", INTEL(R) XEON(R) PLATINUM 8573C, 2 vCPU, 8.3 GB RAM, ubuntu26 20261116.202.1
+
+| Setting | Seconds per image | Speed against base | Spread between repeats | Peak memory | CLIP score | SSIM to base image | LPIPS to base image |
+| base | 39.4 | 1.00 x | 2.7% | 5.47 GB | 20.61 |  |  |
+| torch_dynamic | 37.9 | 1.04 x | 1.2% | 6.20 GB | 18.24 | 0.132 | 0.890 |
+
+- base: warm-up 42.5 s, saved size 4.36 GB, 6 images blocked by the safety checker
+- torch_dynamic: warm-up 37.9 s, pruna smash 38.8 s, could not be saved: [Errno 28] No space left on device
+
+Machine 3: runner "GitHub Actions 1000000086", AMD EPYC 7763 64-Core Processor, 2 vCPU, 8.3 GB RAM, ubuntu26 20261116.202.1
+
+| Setting | Seconds per image | Speed against base | Spread between repeats | Peak memory | CLIP score | SSIM to base image | LPIPS to base image |
+| base | 71.5 | 1.00 x | 1.5% | 5.39 GB | 20.58 |  |  |
+| torch_compile_inductor | 79.5 | 0.90 x | 1.7% | 5.68 GB | 18.99 | 0.920 | 0.085 |
+
+- base: warm-up 72.7 s, saved size 4.36 GB, 6 images blocked by the safety checker
+- torch_compile_inductor: warm-up 162.8 s, pruna smash 22.2 s, could not be saved: [Errno 28] No space left on device, 7 images blocked by the safety checker
