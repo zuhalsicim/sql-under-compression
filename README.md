@@ -3,6 +3,8 @@
 When a small open language model is compressed with [pruna](https://github.com/PrunaAI/pruna),
 how many correct SQL answers does it lose, and what does it save in file size, memory and speed?
 
+This repository holds a benchmark that answers this with measured numbers. It also holds one small experiment with an image model, further down.
+
 ## Results
 
 Model: Qwen2.5-Coder-1.5B-Instruct. Questions: the Spider development set.
@@ -136,6 +138,33 @@ A comparison across machines would mix this with the effect of compression.
 - **Execution accuracy is not a perfect judge.** A wrong query can return the right rows by chance. A right query with another column order counts as wrong. The reference queries of Spider are used as they are.
 - **The prompt shows the schema only.** The model does not see any stored values.
 
+## A second, small experiment: one image model
+
+The same question for one image model: what does pruna change in speed, memory and image quality?
+It ran on the same 2-CPU GitHub machines. There was no GPU. So it shows the method, and what pruna does on a CPU. It does not show the speeds a GPU user gets.
+
+Model: [`nota-ai/bk-sdm-base`](https://huggingface.co/nota-ai/bk-sdm-base), a Stable Diffusion v1.4 with a smaller UNet. 256 x 256 pixels, 15 steps.
+12 prompts from PartiPrompts. Every setting gets the same prompts and the same seeds.
+
+| Setting | Seconds per image | Speed against base | Spread between repeats | Peak memory | CLIP score | SSIM to base image | LPIPS to base image |
+|---|---|---|---|---|---|---|---|
+| base | 41.7 | 1.00 x | 4.9% | 4.19 GB | 22.17 |  |  |
+| deepcache_2 | 21.2 | 1.97 x | 5.7% | 4.21 GB | 23.06 | 0.412 | 0.508 |
+| deepcache_3 | 18.6 | 2.25 x | 1.7% | 4.23 GB | 22.06 | 0.436 | 0.463 |
+
+All numbers come from one run on one machine: [Actions run 45552987716](https://github.com/zuhalsicim/sql-under-compression/actions/runs/45552987716), commit `a77364d`, AMD EPYC 9V45, 2 virtual CPUs, 8.3 GB RAM.
+The files are in `results-image/without-safety-checker/`. `python -m imagebench.make_table results-image/without-safety-checker base deepcache_2 deepcache_3` prints the table.
+
+- **pruna's cacher halves the time per image on a CPU.** `deepcache` reuses part of the UNet's work from the step before: every second step (`deepcache_2`) or two of three steps (`deepcache_3`). Memory and the size of the saved model do not change.
+- **The images change clearly.** SSIM and LPIPS compare each image with the base model's image for the same prompt and seed. An SSIM near 0.4 means another picture, not a slightly noisier copy. "Changed" is not "worse".
+- **The CLIP score does not fall.** It says how well image and prompt fit. With 12 prompts it cannot show a small loss.
+- **Most of pruna's other algorithms refuse a CPU or do not fit this model.** `quanto` and `diffusers_int8` refuse a CPU. `stable_fast`, `x_fast` and `hqq_diffusers` stopped on missing packages. `torch_compile` with the openvino backend failed inside PyTorch. `half`, `fora`, `sage_attn` and `hyper` do not fit this model. `torch_dynamic` and `torch_compile` with the inductor backend ran and brought no gain: 4 % faster with other images and more memory, and 10 % slower. The error texts are in `results-image-first-try/`, the two measurements in `results-image/machines-2-and-3-from-the-job-logs.txt`.
+
+How it is measured: `imagebench/generate.py` runs every setting in a process of its own and measures the time of every image and the peak memory (`VmHWM`). The first three prompts are generated twice; "spread" is the largest gap between two times for the same prompt, as a share of their mean. Every repeat gave exactly the same image. Quality is scored by pruna's `EvaluationAgent` with its built-in metrics `clip_score`, `ssim` and `lpips` (`imagebench/score.py`).
+
+Limits: 12 prompts. 256 x 256 pixels on a model made for 512 x 512. One run on one shared machine. No GPU.
+The safety checker of the pipeline is off for this run, because in the run before it replaced 5 of 12 harmless images of the base model with black ones, and black images cannot be scored.
+
 ## How to reproduce
 
 On GitHub: put this repository into your own account, open the Actions tab, choose "benchmark" and press "Run workflow".
@@ -158,11 +187,14 @@ A new run writes to `output/`. The folders `results/` and `results-full-dev/` ho
 
 These steps were only ever run on the GitHub machines described above.
 
+The image experiment: choose "image" in the Actions tab and press "Run workflow". It took 27 minutes.
+
 The unit tests need only Python and pytest and run on any system:
 
 ```
 pip install -r requirements-dev.txt
 pytest
+pytest imagebench/tests
 ```
 
 ## Files
@@ -186,6 +218,10 @@ pytest
 | `.github/workflows/benchmark.yml` | Runs the unit tests and the five steps on GitHub. |
 | `results/` | The result files of the 200-question run (size, memory, speed), and the package versions it used. |
 | `results-full-dev/` | The result files of the accuracy run with all 1034 questions. |
+| `imagebench/` | The image experiment: `settings.py` (every fixed choice), `measure.py` (prompts, spread, table), `generate.py` (images, time, memory), `score.py` (quality with pruna's EvaluationAgent), `make_table.py`, `tests/`. |
+| `.github/workflows/image.yml` | Runs the image experiment on GitHub, started by hand. |
+| `results-image/` | The result files of the image experiment. |
+| `results-image-first-try/` | Which pruna algorithms ran on a CPU in a first try, and the error texts of those that did not. |
 
 ## Sources and licences
 
@@ -196,5 +232,7 @@ pytest
   revision `6232cc3fad6d54c62b3ba23a364083a98ff36a17`, file `data/spider.zip`.
   This is the last revision that holds the SQLite databases. Later revisions hold only the questions.
   This repository contains no Spider data. The result files hold the SQL the model wrote, but not the questions and not the reference queries.
+- Image model: BK-SDM-Base by Nota AI (Kim et al., <https://arxiv.org/abs/2305.15798>), CreativeML OpenRAIL-M, not gated. <https://huggingface.co/nota-ai/bk-sdm-base>, revision `0c03b7a0369b49f97d1acf7256d4ee55ced9b2e0`.
+- Image prompts: PartiPrompts by Google, Apache-2.0. Downloaded from <https://huggingface.co/datasets/nateraw/parti-prompts>, revision `944b156abfdad7627c3221b5ec4f6a6fb060a197`. This repository contains no prompts and no images.
 - pruna 0.3.5: Apache-2.0. <https://github.com/PrunaAI/pruna>
 - llama.cpp and llama-cpp-python 0.3.36: MIT.
